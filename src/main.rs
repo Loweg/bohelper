@@ -58,17 +58,14 @@ fn main() {
 		for (k, _) in payload.mutations {
 			if k.starts_with("mastery") {
 				// This is a read book
-				for book in &books {
-					if book.id == payload.entity_id.clone().expect("Book has no entity ID") {
-						for item in &items {
-							if item.id == book.memory {
-								for (aspect, intensity) in &item.aspects {
-									if aspect == &args.principle {
-										println!("{} has memory {} with {}: {}", book.label, book.memory, args.principle, intensity)
-									}
-								}
-							}
-						}
+				let book = match books.get(&payload.entity_id.clone().expect("Book has no entity ID")) {
+					Some(book) => book,
+					None => continue, // happens for the journal
+				};
+				let memory = items.get(&book.memory).expect("Couldn't find item for item ID");
+				for (aspect, intensity) in &memory.aspects {
+					if aspect == &args.principle {
+						println!("{} has memory {} with {}: {}", book.label, book.memory, args.principle, intensity)
 					}
 				}
 			}

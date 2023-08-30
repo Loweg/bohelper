@@ -8,17 +8,23 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Clone, Debug)]
 struct ItemFile {
-	elements: Vec<Item>
+	elements: Vec<SerdeItem>
 }
 
 #[derive(Deserialize, Clone, Debug)]
-pub struct Item {
+struct SerdeItem {
 	#[serde(rename = "ID")]
-	pub id: String,
+	id: String,
 	#[serde(rename = "Label")]
+	label: String,
+	aspects: HashMap<String, isize>,
+	unique: Option<bool>,
+}
+
+pub struct Item {
 	pub label: String,
 	pub aspects: HashMap<String, isize>,
-	pub unique: Option<bool>,
+	pub unique: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -44,14 +50,13 @@ struct Trigger {
 
 #[derive(Clone, Debug)]
 pub struct Book {
-	pub id: String,
 	pub label: String,
 	pub aspects: HashMap<String, isize>,
 	pub skill: (String, isize),
 	pub memory: String,
 }
 
-pub fn init_items(data_path: &PathBuf) -> (Vec<Item>, Vec<Book>) {
+pub fn init_items(data_path: &PathBuf) -> (HashMap<String, Item>, HashMap<String, Book>) {
 	let mut items_path = data_path.clone();
 	items_path.push("elements\\aspecteditems.json");
 	let items_file = match File::open(&items_path) {
@@ -59,7 +64,17 @@ pub fn init_items(data_path: &PathBuf) -> (Vec<Item>, Vec<Book>) {
 		Err(_) => panic!("Failed to open game data at {}", items_path.to_string_lossy())
 	};
 	let items_rdr = BufReader::new(items_file);
-	let items: ItemFile = serde_json::from_reader(items_rdr).expect("Failed to parse items file");
+	let items_json: ItemFile = serde_json::from_reader(items_rdr).expect("Failed to parse items file");
+
+	let mut items = HashMap::new();
+
+	for item in items_json.elements {
+		items.insert(item.id, Item {
+			label: item.label,
+			aspects: item.aspects,
+			unique: item.unique.unwrap_or(false),
+		});
+	}
 
 	let mut books_path = data_path.clone();
 	books_path.push("elements\\tomes.json");
@@ -70,7 +85,7 @@ pub fn init_items(data_path: &PathBuf) -> (Vec<Item>, Vec<Book>) {
 	let books_rdr = BufReader::new(books_file);
 	let books_json: BookFile = serde_json::from_reader(books_rdr).expect("Failed to parse tomes file");
 
-	let mut books = Vec::new();
+	let mut books = HashMap::new();
 	for book in books_json.elements {
 		if let None = book.id {
 			continue
@@ -99,14 +114,13 @@ pub fn init_items(data_path: &PathBuf) -> (Vec<Item>, Vec<Book>) {
 			panic!("No memory returned for book {}", book.label.unwrap())
 		}
 
-		books.push(Book {
-			id: book.id.unwrap(),
+		books.insert(book.id.unwrap(), Book {
 			label: book.label.unwrap(),
 			aspects: book.aspects.unwrap(),
 			skill: skill.unwrap(),
 			memory: memory.unwrap(),
-		})
+		});
 	}
 
-	(items.elements, books)
+	(items, books)
 }
