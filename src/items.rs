@@ -19,6 +19,7 @@ struct SerdeItem {
 	label: String,
 	aspects: HashMap<String, isize>,
 	unique: Option<bool>,
+	inherits: String,
 }
 
 pub struct Item {
@@ -69,9 +70,20 @@ pub fn init_items(data_path: &PathBuf) -> (HashMap<String, Item>, HashMap<String
 	let mut items = HashMap::new();
 
 	for item in items_json.elements {
+		let mut aspects = item.aspects;
+		match item.inherits.as_str() {
+			"_beverage" => {aspects.insert("beverage".to_string(), 1);},
+			"_sustenance" => {aspects.insert("sustenance".to_string(), 1);},
+			"_memory" => {aspects.insert("memory".to_string(), 1);}
+			"_memory.persistent" => {
+				aspects.insert("memory".to_string(), 1);
+				aspects.insert("persistent".to_string(), 1);
+			}
+			_ => {},
+		}
 		items.insert(item.id, Item {
 			label: item.label,
-			aspects: item.aspects,
+			aspects: aspects,
 			unique: item.unique.unwrap_or(false),
 		});
 	}

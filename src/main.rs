@@ -22,8 +22,12 @@ struct Args {
 	data_path: String,
 
 	/// Principle of the memory you are looking for
-	#[arg(short, long)]
+	#[arg(short, long, default_value_t = String::new())]
 	principle: String,
+
+	/// Aspects of the item you are looking for
+	#[arg(short, long, num_args = 1..)]
+	aspects: Option<Vec<String>>,
 }
 
 fn main() {
@@ -53,22 +57,51 @@ fn main() {
 	let save: Save = serde_json::from_reader(save_rdr).expect("Failed to parse save file");
 	let payloads = save.root_population_command.resolve();
 
-	println!();
-	for payload in payloads {
-		for (k, _) in payload.mutations {
-			if k.starts_with("mastery") {
-				// This is a read book
-				let book = match books.get(&payload.entity_id.clone().expect("Book has no entity ID")) {
-					Some(book) => book,
-					None => continue, // happens for the journal
-				};
-				let memory = items.get(&book.memory).expect("Couldn't find item for item ID");
-				for (aspect, intensity) in &memory.aspects {
-					if aspect == &args.principle {
-						println!("{} has memory {} with {}: {}", book.label, book.memory, args.principle, intensity)
+
+	if args.principle != String::new() {
+		println!();
+		for payload in payloads {
+			for (k, _) in payload.mutations {
+				if k.starts_with("mastery") {
+					// This is a read book
+					let book = match books.get(&payload.entity_id.clone().expect("Book has no entity ID")) {
+						Some(book) => book,
+						None => continue, // happens for the journal
+					};
+					let memory = items.get(&book.memory).expect("Couldn't find item for item ID");
+					for (aspect, intensity) in &memory.aspects {
+						if aspect == &args.principle {
+							println!("{} has memory {} with {}: {}", book.label, book.memory, args.principle, intensity)
+						}
 					}
 				}
 			}
 		}
+	} else if args.aspects.is_some() {
+		let mut printed = Vec::new();
+		for (_, item) in items {
+			let label = item.label.split("(").next().unwrap().to_owned();
+			if printed.contains(&label) {
+				continue;
+			}
+			let mut valid = true;
+			for aspect in args.aspects.clone().unwrap() {
+				if !item.aspects.contains_key(&aspect) {
+					valid = false;
+				}
+			}
+			if valid {
+				println!();
+				println!("{}", &label);
+				printed.push(label);
+				for (aspect, intensity) in item.aspects {
+					if !aspect.starts_with("boost") {
+						print!("{aspect}: {intensity}  	");
+					}
+				}
+			}
+		}
+	} else {
+		println!("Nothing to do\nUse --help for help")
 	}
 }
