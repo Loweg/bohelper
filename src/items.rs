@@ -5,6 +5,16 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+#[derive(Deserialize, Clone, Debug)]
+struct PrototypeFile {
+	elements: Vec<SerdePrototype>
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct SerdePrototype {
+	id: String,
+	aspects: Option<HashMap<String, isize>>,
+}
 
 #[derive(Deserialize, Clone, Debug)]
 struct ItemFile {
@@ -58,28 +68,27 @@ pub struct Book {
 }
 
 pub fn init_items(data_path: &PathBuf) -> (HashMap<String, Item>, HashMap<String, Book>) {
-	let mut items_path = data_path.clone();
-	items_path.push("elements\\aspecteditems.json");
-	let items_file = match File::open(&items_path) {
-		Ok(f) => f,
-		Err(_) => panic!("Failed to open game data at {}", items_path.to_string_lossy())
-	};
-	let items_rdr = BufReader::new(items_file);
+	let prototypes_rdr = open_data(data_path.clone(), "elements\\_prototypes.json");
+	let prototypes_json: PrototypeFile = serde_json::from_reader(prototypes_rdr).expect("Failed to parse prototypes file");
+
+	let mut prototypes = HashMap::new();
+	for prototype in prototypes_json.elements {
+		if let Some(ext) = prototype.aspects {
+			prototypes.insert(prototype.id, ext);
+		}
+	}
+
+	let items_rdr = open_data(data_path.clone(), "elements\\aspecteditems.json");
 	let items_json: ItemFile = serde_json::from_reader(items_rdr).expect("Failed to parse items file");
 
 	let mut items = HashMap::new();
 
 	for item in items_json.elements {
 		let mut aspects = item.aspects;
-		match item.inherits.as_str() {
-			"_beverage" => {aspects.insert("beverage".to_string(), 1);},
-			"_sustenance" => {aspects.insert("sustenance".to_string(), 1);},
-			"_memory" => {aspects.insert("memory".to_string(), 1);}
-			"_memory.persistent" => {
-				aspects.insert("memory".to_string(), 1);
-				aspects.insert("persistent".to_string(), 1);
+		if let Some(ext) = prototypes.get(&item.inherits) {
+			for (aspect, intensity) in ext {
+				aspects.insert(aspect.clone(), *intensity);
 			}
-			_ => {},
 		}
 		items.insert(item.id, Item {
 			label: item.label,
@@ -88,13 +97,7 @@ pub fn init_items(data_path: &PathBuf) -> (HashMap<String, Item>, HashMap<String
 		});
 	}
 
-	let mut books_path = data_path.clone();
-	books_path.push("elements\\tomes.json");
-	let books_file = match File::open(&books_path) {
-		Ok(f) => f,
-		Err(_) => panic!("Failed to open game data at {}", books_path.to_string_lossy())
-	};
-	let books_rdr = BufReader::new(books_file);
+	let books_rdr = open_data(data_path.clone(), "elements\\tomes.json");
 	let books_json: BookFile = serde_json::from_reader(books_rdr).expect("Failed to parse tomes file");
 
 	let mut books = HashMap::new();
@@ -135,4 +138,14 @@ pub fn init_items(data_path: &PathBuf) -> (HashMap<String, Item>, HashMap<String
 	}
 
 	(items, books)
+}
+
+fn open_data(path: PathBuf, location: &str) -> BufReader<File> {
+	let mut p = path.clone();
+	p.push(location);
+	let file = match File::open(&p) {
+		Ok(f) => f,
+		Err(_) => panic!("Failed to open game data at {}", p.to_string_lossy())
+	};
+	BufReader::new(file)
 }
