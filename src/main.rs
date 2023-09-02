@@ -80,7 +80,11 @@ fn main() {
 	} else if args.aspects.is_some() {
 		let mut printed = Vec::new();
 		for (_, item) in items {
-			let label = item.label.split("(").next().unwrap().to_owned();
+			let label = if item.label.starts_with("Lepidoptery") || item.label.starts_with("Wire") {
+				item.label
+			} else {
+				item.label.split("(").next().unwrap().to_owned()
+			};
 			if printed.contains(&label) {
 				continue;
 			}
