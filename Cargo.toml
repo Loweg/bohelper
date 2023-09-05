@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "*", features = ["derive"] }
+clap-num = "*"
 serde_json = "*"
 serde = { version = "*", features = ["derive"] }
 windows = { version = "0.51", features = ["Storage"] }
