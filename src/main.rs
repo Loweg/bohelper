@@ -61,8 +61,6 @@ fn main() {
 			}
 		}
 	} else if args.solve.is_some() {
-		if args.level < 1 { panic!("Level should be greater than 0") }
-		if args.level > 8 { panic!("Level should be less than 9") }
 		let aspects = args.solve.unwrap();
 		println!();
 
@@ -87,9 +85,9 @@ fn main() {
 							soul.1.iter().any(|a| w.hints.iter().any(|b| b == a))
 						).map(|w| w.label).collect();
 					match stations.len() {
-						1 => println!(              "{} is upgraded at {} when committed to {}", soul.0, stations[0],      commitment.0.split(".").skip(1).next().unwrap()),
+						1 => println!(                 "{} is upgraded at {} when committed to {}", soul.0, stations[0],   commitment.0.split(".").skip(1).next().unwrap()),
 						0 => println!("Warning: {} can't be upgraded with {} when committed to {}", soul.0, skill.1.label, commitment.0.split(".").skip(1).next().unwrap()),
-						_ => println!(              "{} is upgraded at {:?} when committed to {}",  soul.0, stations,      commitment.0.split(".").skip(1).next().unwrap()),
+						_ => println!(               "{} is upgraded at {:?} when committed to {}", soul.0, stations,      commitment.0.split(".").skip(1).next().unwrap()),
 					}
 				}
 				println!();
@@ -117,8 +115,6 @@ fn main() {
 		for (b, m) in rec_books {
 			println!("{}: {}", b, m)
 		}
-
-
 	} else if args.aspects.is_some() {
 		let mut printed = Vec::new();
 		for (_, item) in items {
