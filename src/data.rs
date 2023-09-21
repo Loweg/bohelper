@@ -120,6 +120,59 @@ struct Commitment {
 	effects: HashMap<String, isize>,
 }
 
+#[derive(Deserialize, Clone, Debug)]
+struct RecipeFile {
+	recipes: Vec<SerdeRecipe>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct SerdeRecipe {
+	#[serde(rename = "Label")]
+	label: String,
+	reqs: HashMap<String, isize>,
+}
+
+impl SerdeRecipe {
+	fn to_recipe(self) -> Recipe {
+		let mut skill = None;
+		let mut principle = None;
+		let mut ingredient = None;
+		for (k, _) in self.reqs {
+			if k == "ability" { continue }
+			else if k.starts_with("s.") {
+				skill = Some(k);
+			} else if principles().contains(&k.as_str()) {
+				principle = Some(k);
+			} else {
+				ingredient = Some(k);
+			}
+		}
+		Recipe {
+			label: self.label,
+			skill: skill.expect("Recipe: No skill found"),
+			principle: principle.expect("Recipe: No principle found"),
+			ingredient,
+		}
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct Recipe {
+	pub label:      String,
+	pub skill:      String,
+	pub principle:  String,
+	pub ingredient: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Data {
+	pub items:  HashMap<String, Item>,
+	pub books:  HashMap<String, Book>,
+	pub skills: HashMap<String, Skill>,
+	pub workstations: Vec<Workstation>,
+	pub recipes: (Vec<Recipe>, Vec<Recipe>, Vec<Recipe>),
+}
+
 pub fn principles_from_soul(soul: &String) -> (&'static str, Vec<&'static str>) {
 	match soul.as_str() {
 		"xcho" => ("Chor", vec!["heart", "grail"]),
@@ -135,11 +188,11 @@ pub fn principles_from_soul(soul: &String) -> (&'static str, Vec<&'static str>) 
 	}
 }
 
-fn principles() -> Vec<&'static str> {
+pub fn principles() -> Vec<&'static str> {
 	vec!["edge", "forge", "grail", "heart", "knock", "lantern", "moon", "moth", "nectar", "rose", "scale", "sky", "winter"]
 }
 
-pub fn init_items(data_path: &PathBuf) -> (HashMap<String, Item>, HashMap<String, Book>, HashMap<String, Skill>, Vec<Workstation>) {
+pub fn init_items(data_path: &PathBuf) -> Data {
 	let prototypes_rdr = open_data(data_path.clone(), "elements\\_prototypes.json");
 	let prototypes_json: PrototypeFile = serde_json::from_reader(prototypes_rdr).expect("Failed to parse prototypes file");
 
@@ -249,7 +302,25 @@ pub fn init_items(data_path: &PathBuf) -> (HashMap<String, Item>, HashMap<String
 		});
 	}
 
-	(items, books, skills, workstations_json.verbs)
+	let recipe_rdr = open_data(data_path.clone(), "recipes\\crafting_2_keeper.json");
+	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Keeper recipes");
+	let recipes_keeper: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+
+	let recipe_rdr = open_data(data_path.clone(), "recipes\\crafting_3_scholar.json");
+	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Scholar recipes");
+	let recipes_scholar: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+
+	let recipe_rdr = open_data(data_path.clone(), "recipes\\crafting_4b_prentice.json");
+	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Prentice recipes");
+	let recipes_prentice: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+
+	Data {
+		items,
+		books,
+		skills,
+		workstations: workstations_json.verbs,
+		recipes: (recipes_prentice, recipes_scholar, recipes_keeper),
+	}
 }
 
 fn open_data(path: PathBuf, location: &str) -> BufReader<File> {

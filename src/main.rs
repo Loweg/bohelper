@@ -13,6 +13,13 @@ use save::*;
 
 use crate::data::{init_items, principles_from_soul};
 
+fn insert_recipe(recipes: &mut HashMap<(String, String, Option<String>), Vec<String>>, recipe: ((String, String, Option<String>), String)) {
+	match recipes.get_mut(&recipe.0) {
+		Some(r) => { r.push(recipe.1) },
+		None => { recipes.insert(recipe.0, vec![recipe.1]); },
+	}
+}
+
 fn main() {
 	let args = app::Args::parse();
 
@@ -20,7 +27,7 @@ fn main() {
 	println!("Using game path: {}", data_path.to_string_lossy());
 	data_path.push("bh_Data\\StreamingAssets\\bhcontent\\core");
 
-	let (items, books, skills, workstations) = init_items(&data_path);
+	let data = init_items(&data_path);
 
 	let path = if args.save_path == String::new() {
 		println!("Using default save path");
@@ -47,11 +54,11 @@ fn main() {
 			for (k, _) in payload.mutations {
 				if k.starts_with("mastery") {
 					// This is a read book
-					let book = match books.get(&payload.entity_id.clone().expect("Book has no entity ID")) {
+					let book = match data.books.get(&payload.entity_id.clone().expect("Book has no entity ID")) {
 						Some(book) => book,
 						None => continue, // happens for the journal
 					};
-					let memory = items.get(&book.memory).expect("Couldn't find item for item ID");
+					let memory = data.items.get(&book.memory).expect("Couldn't find item for item ID");
 					for (aspect, intensity) in &memory.aspects {
 						if aspect == &args.principle {
 							println!("{} has memory {} with {}: {}", book.label, memory.label, args.principle, intensity)
@@ -64,7 +71,7 @@ fn main() {
 		let aspects = args.solve.unwrap();
 		println!();
 
-		let matching_skills: Vec<_> = skills.clone().into_iter().filter(|(_, s)|
+		let matching_skills: Vec<_> = data.skills.clone().into_iter().filter(|(_, s)|
 			(s.principles.0 == aspects[0] || s.principles.0 == aspects[1]) &&
 			(s.principles.1 == aspects[0] || s.principles.1 == aspects[1])
 		).collect();
@@ -78,7 +85,7 @@ fn main() {
 				for commitment in vec![skill.1.wisdoms.0, skill.1.wisdoms.1] {
 					let soul = principles_from_soul(&commitment.1);
 					let wisdom = "e.".to_string() + commitment.0.split(".").skip(1).next().unwrap();
-					let stations: Vec<_> = workstations.clone().into_iter()
+					let stations: Vec<_> = data.workstations.clone().into_iter()
 						.filter(|w| w.aspects.contains_key(&wisdom))
 						.filter(|w|
 							(w.hints.contains(&p1) || w.hints.contains(&p2)) &&
@@ -97,9 +104,9 @@ fn main() {
 
 		let read_books = payloads.into_iter()
 			.filter(|p| p.mutations.iter().any(|(m, _)| m.starts_with("mastery")))
-			.filter_map(|p| books.get(&p.entity_id.expect("Read book has no entity ID")))
+			.filter_map(|p| data.books.get(&p.entity_id.expect("Read book has no entity ID")))
 			.filter(|b|
-				items.get(&b.memory).expect("Couldn't find memory")
+				data.items.get(&b.memory).expect("Couldn't find memory")
 					.aspects.iter().any(|a| aspects.iter().any(|arg| arg == a.0))
 			);
 
@@ -108,7 +115,7 @@ fn main() {
 		for m in memories {
 			rec_books.insert(
 				read_books.clone().filter(|b| b.memory == m).next().unwrap().label.clone(),
-				items.get(&m).expect("Couldn't find memory").label.clone()
+				data.items.get(&m).expect("Couldn't find memory").label.clone()
 			);
 		}
 
@@ -117,7 +124,7 @@ fn main() {
 		}
 	} else if args.aspects.is_some() {
 		let mut printed = Vec::new();
-		for (_, item) in items {
+		for (_, item) in data.items {
 			let label = if item.label.starts_with("Lepidoptery") || item.label.starts_with("Wire") {
 				item.label
 			} else {
@@ -140,6 +147,56 @@ fn main() {
 					if !aspect.starts_with("boost") {
 						print!("{aspect}: {intensity}  	");
 					}
+				}
+			}
+		}
+	} else if args.craft.is_some() {
+		println!();
+
+		let owned_skills: Vec<_> = payloads.into_iter()
+			.filter(|p| p.entity_id.clone().is_some_and(|e| e.starts_with("s.")))
+			.map(|p| p.entity_id.unwrap()).collect();
+		let craft = args.craft.unwrap();
+
+		let mut known_recipes = HashMap::new();
+		let rec: Vec<_> = data.recipes.0.iter().chain(data.recipes.1.iter()).chain(data.recipes.2.iter())
+			.filter(|r| owned_skills.contains(&r.skill)).map(|r| ((r.label.clone(), r.principle.clone(), r.ingredient.clone()), r.skill.clone())).collect();
+		for r in rec { insert_recipe(&mut known_recipes, r) }
+
+		if data::principles().contains(&craft.as_str()) {
+
+		} else {
+			let skill = match data.skills.iter().filter(|(_, s)| s.label.starts_with(&craft)).next() {
+				Some(s) => s,
+				None => panic!("Skill not found: {}", craft),
+			};
+			println!("Using skill {}\n", skill.1.label);
+
+			println!("Prentice recipes:");
+			for r in data.recipes.0.into_iter().filter(|r| skill.0 == &r.skill) {
+				match known_recipes.get(&(r.label.clone(), r.principle.clone(), r.ingredient.clone())) {
+					Some(_) => println!("{} ({})", r.label, r.principle),
+					None    => println!("{} ({}) [New Recipe!]", r.label, r.principle),
+				}
+			}
+
+			println!();
+			println!("Scholar recipes:");
+			for r in data.recipes.1.into_iter().filter(|r| skill.0 == &r.skill) {
+				let item = r.ingredient.clone().expect("Scholar recipe uses no ingredient");
+				match known_recipes.get(&(r.label.clone(), r.principle.clone(), r.ingredient.clone())) {
+					Some(_) => println!("{} using {} ({})", r.label, item, r.principle),
+					None    => println!("{} using {} ({}) [New Recipe!]", r.label, item, r.principle),
+				}
+			}
+
+			println!();
+			println!("Keeper recipes:");
+			for r in data.recipes.2.into_iter().filter(|r| skill.0 == &r.skill) {
+				let item = data.items.get(&r.ingredient.clone().expect("Keeper recipe uses no ingredient")).expect("Couldn't find ingredient");
+				match known_recipes.get(&(r.label.clone(), r.principle.clone(), r.ingredient.clone())) {
+					Some(_) => println!("{} using {} ({})", r.label, item.label, r.principle),
+					None    => println!("{} using {} ({}) [New Recipe!]", r.label, item.label, r.principle),
 				}
 			}
 		}
