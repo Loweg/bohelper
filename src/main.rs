@@ -1,14 +1,16 @@
-use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::BufReader;
-use std::path::PathBuf;
+use std::{
+	collections::{HashMap, HashSet},
+	fs::File,
+	io::BufReader,
+	path::PathBuf,
+};
 
 use clap::Parser;
-use windows::Storage::UserDataPaths;
 
 mod app;
 mod data;
 mod save;
+
 use save::*;
 
 use crate::data::{init_items, principles_from_soul};
@@ -25,16 +27,15 @@ fn main() {
 
 	let mut data_path = PathBuf::from(args.data_path);
 	println!("Using game path: {}", data_path.to_string_lossy());
-	data_path.push("bh_Data\\StreamingAssets\\bhcontent\\core");
+	data_path.push("StreamingAssets");
+	data_path.push("bhcontent");
+	data_path.push("core");
 
 	let data = init_items(&data_path);
 
 	let path = if args.save_path == String::new() {
 		println!("Using default save path");
-		let mut path = UserDataPaths::GetDefault().expect("Failed to acquire UserDataPaths instance")
-			.LocalAppDataLow().expect("Failed to find LocalLow path").to_os_string();
-		path.push("\\Weather Factory\\Book of Hours\\AUTOSAVE.json");
-		PathBuf::from(path)
+		default_save_path()
 	} else {
 		PathBuf::from(args.save_path)
 	};

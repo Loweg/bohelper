@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+	collections::HashMap,
+	path::PathBuf,
+};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -69,4 +72,20 @@ pub struct Payload {
 	pub dominions: Vec<Dominion>,
 	pub mutations: HashMap<String, Value>,
 	pub is_shrouded: Option<bool>,
+}
+
+#[cfg(windows)]
+pub fn default_save_path() -> PathBuf {
+	use windows::Storage::UserDataPaths;
+	let mut path = UserDataPaths::GetDefault().expect("Failed to acquire UserDataPaths instance")
+		.LocalAppDataLow().expect("Failed to find LocalLow path").to_os_string();
+	path.push("Weather Factory");
+	path.push("Book of Hours");
+	path.push("AUTOSAVE.json");
+	PathBuf::from(path)
+}
+
+#[cfg(unix)]
+pub fn default_save_path() -> PathBuf {
+	PathBuf::from("/Users/loweg/Library/Application Support/Weather Factory/Book of Hours/AUTOSAVE.json")
 }
