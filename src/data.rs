@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -95,7 +95,6 @@ struct SkillFile {
 
 #[derive(Deserialize, Clone, Debug)]
 struct SerdeSkill {
-	#[serde(rename = "ID")]
 	id: String,
 	#[serde(rename = "Label")]
 	label: String,
@@ -203,8 +202,15 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 		}
 	}
 
-	let items_rdr = open_data(data_path.clone(), "elements", "aspecteditems.json");
-	let items_json: ItemFile = serde_json::from_reader(items_rdr).expect("Failed to parse items file");
+	let mut item_path = data_path.clone();
+	item_path.push("elements");
+	item_path.push("aspecteditems.json");
+	let mut f = File::open(item_path).unwrap();
+	let mut data = Vec::new();
+	f.read_to_end(&mut data).unwrap();
+
+	let items_data = String::from_utf16le(&data[2..]).unwrap();
+	let items_json: ItemFile = serde_json::from_str(&items_data).expect("Failed to parse items file");
 
 	let mut items = HashMap::new();
 
@@ -222,8 +228,15 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 		});
 	}
 
-	let books_rdr = open_data(data_path.clone(), "elements", "tomes.json");
-	let books_json: BookFile = serde_json::from_reader(books_rdr).expect("Failed to parse tomes file");
+	let mut book_path = data_path.clone();
+	book_path.push("elements");
+	book_path.push("tomes.json");
+	let mut bf = File::open(book_path).unwrap();
+	let mut b_data = Vec::new();
+	bf.read_to_end(&mut b_data).unwrap();
+
+	let books_data = String::from_utf16le(&b_data[2..]).unwrap();
+	let books_json: BookFile = serde_json::from_str(&books_data).expect("Failed to parse tomes file");
 
 	let mut books = HashMap::new();
 	for book in books_json.elements {

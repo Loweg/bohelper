@@ -1,3 +1,5 @@
+#![feature(str_from_utf16_endian)]
+
 use std::{
 	collections::{HashMap, HashSet},
 	fs::File,
