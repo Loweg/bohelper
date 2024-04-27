@@ -14,7 +14,7 @@ pub struct Save {
 }
 
 impl Save {
-	pub fn resolve(self) -> Vec<WorldItem> {
+	pub fn resolve(self) -> (Vec<WorldItem>, Vec<String>, Vec<String>) {
 		let mut environs = self.populate_xamanek_command.current_enviro_fx_commands;
 		let non_locations = ["$type", "vignette", "sky", "weather", "music", "ui_watcher_buttons", "season", "ui_wisdoms_or_world", "meta", "run"];
 		for non in non_locations {
@@ -64,15 +64,15 @@ impl Save {
 				}
 			} else if id == "hand.skills" {
 				for payload in sphere.resolve() {
-					skills.push(payload.entity_id);
+					skills.push(payload.entity_id.unwrap());
 				}
 			} else if id == "hand.abilities" {
 				for payload in sphere.resolve() {
-					abilities.push(payload.entity_id);
+					abilities.push(payload.entity_id.unwrap());
 				}
 			}
 		}
-		world_items
+		(world_items, skills, abilities)
 	}
 }
 

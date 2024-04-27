@@ -1,7 +1,7 @@
 #![feature(str_from_utf16_endian)]
 
 use std::{
-	collections::HashMap,
+	collections::{HashMap, HashSet},
 	fs::File,
 	io::BufReader,
 	path::PathBuf,
@@ -17,13 +17,6 @@ mod save;
 use data::{init_items, principles_from_soul};
 use logic::find_memories;
 use save::{default_save_path, Save};
-
-fn insert_recipe(recipes: &mut HashMap<(String, String, Option<String>), Vec<String>>, recipe: ((String, String, Option<String>), String)) {
-	match recipes.get_mut(&recipe.0) {
-		Some(r) => { r.push(recipe.1) },
-		None => { recipes.insert(recipe.0, vec![recipe.1]); },
-	}
-}
 
 fn main() {
 	let args = app::Args::parse();
@@ -45,7 +38,8 @@ fn main() {
 	let save_file = File::open(path).expect("Failed to open save file");
 	let save_rdr = BufReader::new(save_file);
 	let save: Save = serde_json::from_reader(save_rdr).expect("Failed to parse save file");
-	let world_items = save.resolve().into_iter().filter(|i|
+	let (save_items, skills, _abilities) = save.resolve();
+	let world_items = save_items.into_iter().filter(|i|
 		data.items.contains_key(&i.id) ||
 		data.books.contains_key(&i.id) ||
 		data.skills.contains_key(&i.id)).collect();
@@ -123,23 +117,17 @@ fn main() {
 		}
 	} else if args.craft.is_some() {
 		println!();
-
-		let owned_skills: Vec<_> = world_items.into_iter()
-			.filter(|p| p.id.starts_with("s."))
-			.map(|p| p.id).collect();
 		let craft = args.craft.unwrap();
 
-		let mut known_recipes = HashMap::new();
-		let rec: Vec<_> = data.recipes.0.iter().chain(data.recipes.1.iter()).chain(data.recipes.2.iter())
-			.filter(|r| owned_skills.contains(&r.skill)).map(|r| ((r.label.clone(), r.principle.clone(), r.ingredient.clone()), r.skill.clone())).collect();
-		for r in rec { insert_recipe(&mut known_recipes, r) }
+		let known_recipes: HashSet<_> = data.recipes.0.iter().chain(data.recipes.1.iter()).chain(data.recipes.2.iter())
+			.filter(|r| skills.contains(&r.skill)).map(|r| (r.label.clone(), r.principle.clone(), r.ingredient.clone())).collect();
 
 		if data::principles().contains(&craft.as_str()) {
 
 		} else {
-			let skill = match data.skills.iter().filter(|(_, s)| s.label.starts_with(&craft)).next() {
+			let skill = match data.skills.iter().filter(|(_, s)| s.label.to_lowercase().starts_with(&craft.to_lowercase())).next() {
 				Some(s) => s,
-				None => panic!("Skill not found: {}", craft),
+				None => { println!("Skill not found: {}", craft); return; },
 			};
 			println!("Using skill {}\n", skill.1.label);
 
