@@ -84,7 +84,7 @@ pub struct WorldItem {
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct World {
-	current_enviro_fx_commands: HashMap<String, serde_json::Value>,
+	current_enviro_fx_commands: HashMap<String, Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]

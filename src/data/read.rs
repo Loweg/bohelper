@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::{
 	collections::HashMap,
 	io::{BufReader, Read},
@@ -9,6 +7,8 @@ use std::{
 
 use serde::Deserialize;
 
+use super::*;
+
 #[derive(Deserialize, Clone, Debug)]
 struct PrototypeFile {
 	elements: Vec<SerdePrototype>
@@ -17,7 +17,7 @@ struct PrototypeFile {
 #[derive(Deserialize, Clone, Debug)]
 struct SerdePrototype {
 	id: String,
-	aspects: Option<HashMap<String, isize>>,
+	aspects: Option<AspectMap>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -31,7 +31,7 @@ struct SerdeItem {
 	id: String,
 	#[serde(rename = "Label")]
 	label: String,
-	aspects: HashMap<String, isize>,
+	aspects: AspectMap,
 	xtriggers: Option<XTrigger>,
 	inherits: String,
 }
@@ -46,13 +46,6 @@ struct Scrutiny {
 	id: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct Item {
-	pub label: String,
-	pub aspects: HashMap<String, isize>,
-	pub scrutiny: Option<String>,
-}
-
 #[derive(Deserialize, Clone, Debug)]
 struct BookFile {
 	elements: Vec<SerdeBook>
@@ -64,7 +57,7 @@ struct SerdeBook {
 	id: Option<String>,
 	#[serde(rename = "Label")]
 	label: Option<String>,
-	aspects: Option<HashMap<String, isize>>,
+	aspects: Option<AspectMap>,
 	xtriggers: Option<HashMap<String, Vec<Trigger>>>
 }
 
@@ -74,32 +67,9 @@ struct Trigger {
 	level: isize,
 }
 
-#[derive(Clone, Debug)]
-pub struct Book {
-	pub label: String,
-	pub aspects: HashMap<String, isize>,
-	pub skill: (String, isize),
-	pub memory: String,
-}
-
 #[derive(Deserialize, Clone, Debug)]
 struct WorkstationFile {
 	verbs: Vec<Workstation>,
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct Workstation {
-	//pub id: String,
-	pub label: String,
-	pub slots: Vec<Slot>,
-	pub aspects: HashMap<String, isize>,
-	pub hints: Vec<String>,
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct Slot {
-	pub label: String,
-	pub required: HashMap<String, isize>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -112,14 +82,7 @@ struct SerdeSkill {
 	id: String,
 	#[serde(rename = "Label")]
 	label: String,
-	aspects: HashMap<String, isize>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Skill {
-	pub label: String,
-	pub principles: (String, String),
-	pub wisdoms: ((String, String), (String, String)),
+	aspects: AspectMap,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -130,7 +93,7 @@ struct WisdomCommitments {
 #[derive(Deserialize, Clone, Debug)]
 struct Commitment {
 	id: String,
-	effects: HashMap<String, isize>,
+	effects: AspectMap,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -142,11 +105,11 @@ struct RecipeFile {
 struct SerdeRecipe {
 	#[serde(rename = "Label")]
 	label: String,
-	reqs: HashMap<String, isize>,
+	reqs: AspectMap,
 }
 
 impl SerdeRecipe {
-	fn to_recipe(self) -> Recipe {
+	fn into_recipe(self) -> Recipe {
 		let mut skill = None;
 		let mut principle = None;
 		let mut ingredient = None;
@@ -170,39 +133,12 @@ impl SerdeRecipe {
 }
 
 #[derive(Clone, Debug)]
-pub struct Recipe {
-	pub label:      String,
-	pub skill:      String,
-	pub principle:  String,
-	pub ingredient: Option<String>,
-}
-
-#[derive(Clone, Debug)]
 pub struct Data {
 	pub items:  HashMap<String, Item>,
 	pub books:  HashMap<String, Book>,
 	pub skills: HashMap<String, Skill>,
 	pub workstations: Vec<Workstation>,
 	pub recipes: (Vec<Recipe>, Vec<Recipe>, Vec<Recipe>),
-}
-
-pub fn principles_from_soul(soul: &String) -> (&'static str, Vec<&'static str>) {
-	match soul.as_str() {
-		"xcho" => ("Chor", vec!["heart", "grail"]),
-		"xere" => ("Ereb", vec!["grail", "edge"]),
-		"xfet" => ("Fet", vec!["rose", "moth"]),
-		"xhea" => ("Health", vec!["heart", "nectar", "scale"]),
-		"xmet" => ("Mettle", vec!["forge", "edge"]),
-		"xpho" => ("Phost", vec!["lantern", "sky"]),
-		"xsha" => ("Shapt", vec!["knock", "forge"]),
-		"xtri" => ("Trist", vec!["moth", "moon"]),
-		"xwis" => ("Wist", vec!["winter", "lantern"]),
-		s      => panic!("Unexpected Element of the Soul: {}", s),
-	}
-}
-
-pub fn principles() -> Vec<&'static str> {
-	vec!["edge", "forge", "grail", "heart", "knock", "lantern", "moon", "moth", "nectar", "rose", "scale", "sky", "winter"]
 }
 
 pub fn init_items(data_path: &PathBuf) -> Data {
@@ -251,15 +187,15 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 
 	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_2_keeper.json");
 	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Keeper recipes");
-	let recipes_keeper: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+	let recipes_keeper: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.into_recipe()).collect();
 
 	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_3_scholar.json");
 	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Scholar recipes");
-	let recipes_scholar: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+	let recipes_scholar: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.into_recipe()).collect();
 
 	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_4b_prentice.json");
 	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Prentice recipes");
-	let recipes_prentice: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+	let recipes_prentice: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.into_recipe()).collect();
 
 	Data {
 		items,
@@ -281,7 +217,7 @@ fn open_data(path: PathBuf, dir: &str, file: &str) -> BufReader<File> {
 	BufReader::new(file)
 }
 
-fn parse_items(item_file: ItemFile, prototypes: HashMap<String, HashMap<String, isize>>) -> HashMap<String, Item> {
+fn parse_items(item_file: ItemFile, prototypes: HashMap<String, AspectMap>) -> HashMap<String, Item> {
 	let mut items = HashMap::new();
 
 	for item in item_file.elements {
@@ -291,7 +227,7 @@ fn parse_items(item_file: ItemFile, prototypes: HashMap<String, HashMap<String, 
 				aspects.insert(aspect.clone(), *intensity);
 			}
 		};
-		let scrutiny = item.xtriggers.filter(|t| t.scrutiny.get(0).is_some_and(|s| s.id != "")).map(|t| t.scrutiny.get(0).unwrap().id.clone());
+		let scrutiny = item.xtriggers.filter(|t| t.scrutiny.first().is_some_and(|s| s.id.is_empty())).map(|t| t.scrutiny.first().unwrap().id.clone());
 		items.insert(item.id, Item {
 			label: item.label,
 			aspects,
@@ -304,7 +240,7 @@ fn parse_items(item_file: ItemFile, prototypes: HashMap<String, HashMap<String, 
 fn parse_books(book_file: BookFile) -> HashMap<String, Book> {
 	let mut books = HashMap::new();
 	for book in book_file.elements {
-		if let None = book.id {
+		if book.id.is_none() {
 			continue
 		};
 
@@ -324,10 +260,10 @@ fn parse_books(book_file: BookFile) -> HashMap<String, Book> {
 			}
 		}
 
-		if skill == None {
+		if skill.is_none() {
 			panic!("No skill returned for book {}", book.label.unwrap())
 		}
-		if memory == None {
+		if memory.is_none() {
 			panic!("No memory returned for book {}", book.label.unwrap())
 		}
 

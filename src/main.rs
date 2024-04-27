@@ -1,7 +1,7 @@
 #![feature(str_from_utf16_endian)]
 
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashSet,
 	fs::File,
 	io::BufReader,
 	path::PathBuf,
@@ -14,9 +14,11 @@ mod data;
 mod logic;
 mod save;
 
-use data::{init_items, principles_from_soul};
-use logic::find_memories;
+use data::init_items;
+use logic::{find_memories, print_skill_stations};
 use save::{default_save_path, Save};
+
+use crate::logic::print_aspected;
 
 fn main() {
 	let args = app::Args::parse();
@@ -53,34 +55,16 @@ fn main() {
 	} else if args.solve.is_some() {
 		let aspects = args.solve.unwrap();
 		println!();
-		let matching_skills: Vec<_> = data.skills.clone().into_iter().filter(|(_, s)|
-			(s.principles.0 == aspects[0] || s.principles.0 == aspects[1]) &&
-			(s.principles.1 == aspects[0] || s.principles.1 == aspects[1])
-		).collect();
-		if matching_skills.len() == 0 {
+
+		let matching_skills: Vec<_> = data.skills.iter()
+			.filter(|(_, s)| s.matches_exact(&aspects))
+			.map(|(_, s)| s).collect();
+
+		if matching_skills.is_empty() {
 			println!("Warning: no matching skills")
 		} else {
 			println!("Matching skills:");
-			for skill in matching_skills {
-				println!("{}", skill.1.label);
-				let (p1, p2) = (skill.1.principles.0, skill.1.principles.1);
-				for commitment in vec![skill.1.wisdoms.0, skill.1.wisdoms.1] {
-					let soul = principles_from_soul(&commitment.1);
-					let wisdom = "e.".to_string() + commitment.0.split(".").skip(1).next().unwrap();
-					let stations: Vec<_> = data.workstations.clone().into_iter()
-						.filter(|w| w.aspects.contains_key(&wisdom))
-						.filter(|w|
-							(w.hints.contains(&p1) || w.hints.contains(&p2)) &&
-							soul.1.iter().any(|a| w.hints.iter().any(|b| b == a))
-						).map(|w| w.label).collect();
-					match stations.len() {
-						1 => println!(                 "{} is upgraded at {} when committed to {}", soul.0, stations[0],   commitment.0.split(".").skip(1).next().unwrap()),
-						0 => println!("Warning: {} can't be upgraded with {} when committed to {}", soul.0, skill.1.label, commitment.0.split(".").skip(1).next().unwrap()),
-						_ => println!(               "{} is upgraded at {:?} when committed to {}", soul.0, stations,      commitment.0.split(".").skip(1).next().unwrap()),
-					}
-				}
-				println!();
-			}
+			print_skill_stations(&matching_skills, &data.workstations);
 		}
 		println!();
 
@@ -88,44 +72,20 @@ fn main() {
 			println!("{}:\t {}", mem.source_label, mem.label)
 		}
 	} else if args.aspects.is_some() {
-		let mut printed = Vec::new();
-		for (_, item) in data.items {
-			let label = if item.label.starts_with("Lepidoptery") || item.label.starts_with("Wire") {
-				item.label
-			} else {
-				item.label.split("(").next().unwrap().to_owned()
-			};
-			if printed.contains(&label) {
-				continue;
-			}
-			let mut valid = true;
-			for aspect in args.aspects.clone().unwrap() {
-				if !item.aspects.contains_key(&aspect) {
-					valid = false;
-				}
-			}
-			if valid {
-				println!();
-				println!("{}", &label);
-				printed.push(label);
-				for (aspect, intensity) in item.aspects {
-					if !aspect.starts_with("boost") {
-						print!("{aspect}: {intensity}  	");
-					}
-				}
-			}
-		}
+		print_aspected(&data.items, &args.aspects.unwrap())
 	} else if args.craft.is_some() {
 		println!();
 		let craft = args.craft.unwrap();
 
 		let known_recipes: HashSet<_> = data.recipes.0.iter().chain(data.recipes.1.iter()).chain(data.recipes.2.iter())
-			.filter(|r| skills.contains(&r.skill)).map(|r| (r.label.clone(), r.principle.clone(), r.ingredient.clone())).collect();
+			.filter(|r| skills.contains(&r.skill)).map(|r| r.label.clone()).collect();
 
 		if data::principles().contains(&craft.as_str()) {
 
 		} else {
-			let skill = match data.skills.iter().filter(|(_, s)| s.label.to_lowercase().starts_with(&craft.to_lowercase())).next() {
+			let skill = match data.skills.iter()
+				.find(|(_, s)| s.label.to_lowercase().starts_with(&craft.to_lowercase()))
+			{
 				Some(s) => s,
 				None => { println!("Skill not found: {}", craft); return; },
 			};
@@ -133,7 +93,7 @@ fn main() {
 
 			println!("Prentice recipes:");
 			for r in data.recipes.0.into_iter().filter(|r| skill.0 == &r.skill) {
-				match known_recipes.get(&(r.label.clone(), r.principle.clone(), r.ingredient.clone())) {
+				match known_recipes.get(&r.label) {
 					Some(_) => println!("{} ({})", r.label, r.principle),
 					None    => println!("{} ({}) [New Recipe!]", r.label, r.principle),
 				}
@@ -143,7 +103,7 @@ fn main() {
 			println!("Scholar recipes:");
 			for r in data.recipes.1.into_iter().filter(|r| skill.0 == &r.skill) {
 				let item = r.ingredient.clone().expect("Scholar recipe uses no ingredient");
-				match known_recipes.get(&(r.label.clone(), r.principle.clone(), r.ingredient.clone())) {
+				match known_recipes.get(&r.label) {
 					Some(_) => println!("{} using {} ({})", r.label, item, r.principle),
 					None    => println!("{} using {} ({}) [New Recipe!]", r.label, item, r.principle),
 				}
@@ -153,7 +113,7 @@ fn main() {
 			println!("Keeper recipes:");
 			for r in data.recipes.2.into_iter().filter(|r| skill.0 == &r.skill) {
 				let item = data.items.get(&r.ingredient.clone().expect("Keeper recipe uses no ingredient")).expect("Couldn't find ingredient");
-				match known_recipes.get(&(r.label.clone(), r.principle.clone(), r.ingredient.clone())) {
+				match known_recipes.get(&r.label) {
 					Some(_) => println!("{} using {} ({})", r.label, item.label, r.principle),
 					None    => println!("{} using {} ({}) [New Recipe!]", r.label, item.label, r.principle),
 				}

@@ -1,11 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{data::{Book, Item}, save::WorldItem};
+use crate::{
+	data::{principles_from_soul, AspectMap, Book, Item, Skill, Workstation},
+	save::WorldItem
+};
 
 pub struct Memory {
 	pub label: String,
 	pub source_label: String,
-	pub aspects: HashMap<String, isize>,
+	pub aspects: AspectMap,
 }
 
 pub fn find_memories(
@@ -38,7 +41,7 @@ pub fn find_memories(
 		};
 
 		// Scrutiny
-		if let Some(item) = items.get(&item.id) {
+		/*if let Some(item) = items.get(&item.id) {
 			if let Some(s) = &item.scrutiny {
 				if let Some(mem) = items.get(s) {
 					if insert_mem(mem, s.clone(), item.label.clone()) {
@@ -46,10 +49,10 @@ pub fn find_memories(
 					}
 				}
 			}
-		}
+		}*/
 
 		// Book
-		for (k, _) in &item.mutations {
+		for k in item.mutations.keys() {
 			if k.starts_with("mastery") {
 				if let Some(book) = books.get(&item.id.clone()) {
 					let mem = items.get(&book.memory).expect("Couldn't find item for item ID");
@@ -62,4 +65,51 @@ pub fn find_memories(
 		}
 	}
 	mems
+}
+
+pub fn print_skill_stations(skills: &Vec<&Skill>, workstations: &[Workstation]) {
+	for skill in skills {
+		println!("{}", skill.label);
+		print_commitment(&skill.wisdoms.0, skill, workstations);
+		print_commitment(&skill.wisdoms.1, skill, workstations);
+		println!();
+	}
+}
+
+fn print_commitment(commit: &(String, String), skill: &Skill, workstations: &[Workstation]) {
+	let wisdom = commit.0.split('.').nth(1)	.unwrap();
+	let soul = principles_from_soul(&commit.1);
+	let id = "e.".to_string() + wisdom;
+	let stations: Vec<_> = workstations.iter().filter(|w| w.aspects.contains_key(&id))
+		.filter(|w| skill.matches(&w.hints) && soul.1.iter().any(|a| w.hints.iter().any(|b| b == a)))
+		.map(|w| &w.label).collect();
+	match stations.len() {
+		1 => println!(                 "{} is upgraded at {} when committed to {}", soul.0, stations[0], wisdom),
+		0 => println!("Warning: {} can't be upgraded with {} when committed to {}", soul.0, skill.label, wisdom),
+		_ => println!(               "{} is upgraded at {:?} when committed to {}", soul.0, stations, wisdom),
+	}
+}
+
+pub fn print_aspected(items: &HashMap<String, Item>, aspects: &[String]) {
+	let mut found = HashMap::new();
+
+	for item in items.values() {
+		let label = if item.label.starts_with("Lepidoptery") || item.label.starts_with("Wire") {
+			&item.label
+		} else {
+			item.label.split('(').next().unwrap()
+		};
+		if found.contains_key(label) { continue; }
+
+		if aspects.iter().all(|a| item.aspects.contains_key(a)) {
+			println!();
+			println!("{}", &label);
+			found.insert(label, &item.aspects);
+			for (aspect, intensity) in &item.aspects {
+				if !aspect.starts_with("boost") {
+					print!("{aspect}: {intensity}  	");
+				}
+			}
+		}
+	}
 }
