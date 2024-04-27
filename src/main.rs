@@ -52,7 +52,7 @@ fn main() {
 
 	if args.principle != String::new() {
 		println!();
-		for mem in find_memories(&args.principle, 8, &world_items, &data.items, &data.books) {
+		for mem in find_memories(&[&args.principle], 8, &world_items, &data.items, &data.books) {
 			let intensity = mem.aspects.get(&args.principle).unwrap();
 			println!("{} has memory {} with {}: {}", mem.source_label, mem.label, args.principle, intensity)
 		}
@@ -90,8 +90,8 @@ fn main() {
 		}
 		println!();
 
-		for mem in find_memories(&args.principle, 8, &world_items, &data.items, &data.books) {
-			println!("{}: {}", mem.source_label, mem.label)
+		for mem in find_memories(&[&aspects[0], &aspects[1]], 8, &world_items, &data.items, &data.books) {
+			println!("{}:\t {}", mem.source_label, mem.label)
 		}
 	} else if args.aspects.is_some() {
 		let mut printed = Vec::new();

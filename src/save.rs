@@ -10,16 +10,67 @@ use serde_json::Value;
 #[serde(rename_all = "PascalCase")]
 pub struct Save {
 	root_population_command: Dominion,
+	populate_xamanek_command: World,
 }
 
 impl Save {
-	pub fn resolve(&self) -> Vec<WorldItem> {
+	pub fn resolve(self) -> Vec<WorldItem> {
+		let mut environs = self.populate_xamanek_command.current_enviro_fx_commands;
+		let non_locations = ["$type", "vignette", "sky", "weather", "music", "ui_watcher_buttons", "season", "ui_wisdoms_or_world", "meta", "run"];
+		for non in non_locations {
+			environs.remove(non);
+		}
+		let locations: Vec<_> = environs.into_iter().map(|e| e.0).collect();
+
+		let item_spheres = ["fixedverbs", "portage1", "portage2", "portage3", "portage4", "portage5", "TerrainDetailInputSphere", "hand.misc", "hand.memories"];
+
 		let mut world_items = Vec::new();
-		for payload in self.root_population_command.resolve() {
-			world_items.push(WorldItem {
-				id: payload.entity_id.expect("No entity ID"),
-				mutations: payload.mutations,
-			})
+		let mut skills = Vec::new();
+		let mut abilities = Vec::new();
+		for sphere in self.root_population_command.spheres {
+			let id = sphere.governing_sphere_spec.id.clone();
+			if item_spheres.contains(&id.as_str()) {
+				for payload in sphere.resolve() {
+					world_items.push(WorldItem {
+						id: payload.entity_id.expect("No entity ID"),
+						mutations: payload.mutations,
+					})
+				}
+			} else if id == "Library" {
+				for token in &sphere.tokens {
+					if locations.contains(&token.payload.id) {
+						if token.payload.id == "brancrug" {
+							for dominion in &token.payload.dominions {
+								for sphere in &dominion.spheres {
+									if !sphere.governing_sphere_spec.id.starts_with("ChristmasSlot") {
+										for payload in sphere.resolve() {
+											world_items.push(WorldItem {
+												id: payload.entity_id.expect("No entity ID"),
+												mutations: payload.mutations,
+											})
+										}
+									}
+								}
+							}
+							continue;
+						}
+						for payload in token.resolve() {
+							world_items.push(WorldItem {
+								id: payload.entity_id.expect("No entity ID"),
+								mutations: payload.mutations,
+							})
+						}
+					}
+				}
+			} else if id == "hand.skills" {
+				for payload in sphere.resolve() {
+					skills.push(payload.entity_id);
+				}
+			} else if id == "hand.abilities" {
+				for payload in sphere.resolve() {
+					abilities.push(payload.entity_id);
+				}
+			}
 		}
 		world_items
 	}
@@ -28,6 +79,12 @@ impl Save {
 pub struct WorldItem {
 	pub id: String,
 	pub mutations: HashMap<String, Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct World {
+	current_enviro_fx_commands: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -49,6 +106,7 @@ impl Dominion {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "PascalCase")]
 struct Sphere {
+	governing_sphere_spec: Spec,
 	tokens: Vec<Token>
 }
 
@@ -60,6 +118,12 @@ impl Sphere {
 		}
 		payloads
 	}
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Spec {
+	id: String,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -86,6 +150,7 @@ impl Token {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "PascalCase")]
 struct Payload {
+	id: String,
 	entity_id: Option<String>,
 	dominions: Vec<Dominion>,
 	mutations: HashMap<String, Value>,
