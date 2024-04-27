@@ -16,7 +16,7 @@ pub struct Args {
 	#[arg(short, long, default_value_t = String::new())]
 	pub principle: String,
 
-	/// The aspects of the skill you want to upgrade, and its level.
+	/// The aspects of the skill you want to upgrade or commit.
 	#[arg(long, short = 'S', num_args = 2)]
 	pub solve: Option<Vec<String>>,
 

@@ -9,17 +9,35 @@ use serde_json::Value;
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Save {
-	pub root_population_command: Dominion,
+	root_population_command: Dominion,
+}
+
+impl Save {
+	pub fn resolve(&self) -> Vec<WorldItem> {
+		let mut world_items = Vec::new();
+		for payload in self.root_population_command.resolve() {
+			world_items.push(WorldItem {
+				id: payload.entity_id.expect("No entity ID"),
+				mutations: payload.mutations,
+			})
+		}
+		world_items
+	}
+}
+
+pub struct WorldItem {
+	pub id: String,
+	pub mutations: HashMap<String, Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub struct Dominion {
+struct Dominion {
 	spheres: Vec<Sphere>,
 }
 
 impl Dominion {
-	pub fn resolve(&self) -> Vec<Payload> {
+	fn resolve(&self) -> Vec<Payload> {
 		let mut payloads = Vec::new();
 		for sphere in &self.spheres {
 			payloads.extend(sphere.resolve())
@@ -30,7 +48,7 @@ impl Dominion {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub struct Sphere {
+struct Sphere {
 	tokens: Vec<Token>
 }
 
@@ -46,7 +64,7 @@ impl Sphere {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub struct Token {
+struct Token {
 	payload: Payload,
 }
 
@@ -67,11 +85,10 @@ impl Token {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub struct Payload {
-	pub entity_id: Option<String>,
-	pub dominions: Vec<Dominion>,
-	pub mutations: HashMap<String, Value>,
-	pub is_shrouded: Option<bool>,
+struct Payload {
+	entity_id: Option<String>,
+	dominions: Vec<Dominion>,
+	mutations: HashMap<String, Value>,
 }
 
 #[cfg(windows)]

@@ -1,7 +1,11 @@
-use std::collections::HashMap;
-use std::io::{BufReader, Read};
-use std::fs::File;
-use std::path::PathBuf;
+#![allow(dead_code)]
+
+use std::{
+	collections::HashMap,
+	io::{BufReader, Read},
+	fs::File,
+	path::PathBuf,
+};
 
 use serde::Deserialize;
 
@@ -28,15 +32,25 @@ struct SerdeItem {
 	#[serde(rename = "Label")]
 	label: String,
 	aspects: HashMap<String, isize>,
-	unique: Option<bool>,
+	xtriggers: Option<XTrigger>,
 	inherits: String,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct XTrigger {
+	scrutiny: Vec<Scrutiny>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct Scrutiny {
+	id: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct Item {
 	pub label: String,
 	pub aspects: HashMap<String, isize>,
-	pub unique: bool,
+	pub scrutiny: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -75,7 +89,7 @@ struct WorkstationFile {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Workstation {
-	pub id: String,
+	//pub id: String,
 	pub label: String,
 	pub slots: Vec<Slot>,
 	pub aspects: HashMap<String, isize>,
@@ -224,7 +238,7 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 		items.insert(item.id, Item {
 			label: item.label,
 			aspects,
-			unique: item.unique.unwrap_or(false),
+			scrutiny: item.xtriggers.map(|s| s.scrutiny.get(0).expect("Empty scrutiny").id.clone()),
 		});
 	}
 
@@ -237,9 +251,54 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 
 	let books_data = String::from_utf16le(&b_data[2..]).unwrap();
 	let books_json: BookFile = serde_json::from_str(&books_data).expect("Failed to parse tomes file");
+	let books = parse_books(books_json);
 
+	let workstations_rdr = open_data(data_path.clone(), "verbs", "workstations_library_world.json");
+	let workstations_json: WorkstationFile = serde_json::from_reader(workstations_rdr).expect("Failed to parse workstations file");
+
+	let wis_rdr = open_data(data_path.clone(), "recipes", "wisdom_commitments.json");
+	let wis_json: WisdomCommitments = serde_json::from_reader(wis_rdr).expect("Failed to parse wisdom commitments file");
+	let commitments: HashMap<_, _> = wis_json.recipes.into_iter().map(|w| (w.id.clone(), w)).collect();
+
+	let skills_rdr = open_data(data_path.clone(), "elements", "skills.json");
+	let skills_json: SkillFile = serde_json::from_reader(skills_rdr).expect("Failed to parse skills file");
+	let skills = parse_skills(skills_json, commitments);
+
+	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_2_keeper.json");
+	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Keeper recipes");
+	let recipes_keeper: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+
+	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_3_scholar.json");
+	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Scholar recipes");
+	let recipes_scholar: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+
+	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_4b_prentice.json");
+	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Prentice recipes");
+	let recipes_prentice: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
+
+	Data {
+		items,
+		books,
+		skills,
+		workstations: workstations_json.verbs,
+		recipes: (recipes_prentice, recipes_scholar, recipes_keeper),
+	}
+}
+
+fn open_data(path: PathBuf, dir: &str, file: &str) -> BufReader<File> {
+	let mut p = path.clone();
+	p.push(dir);
+	p.push(file);
+	let file = match File::open(&p) {
+		Ok(f) => f,
+		Err(_) => panic!("Failed to open game data at {}", p.to_string_lossy())
+	};
+	BufReader::new(file)
+}
+
+fn parse_books(book_file: BookFile) -> HashMap<String, Book> {
 	let mut books = HashMap::new();
-	for book in books_json.elements {
+	for book in book_file.elements {
 		if let None = book.id {
 			continue
 		};
@@ -274,19 +333,12 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 			memory: memory.unwrap(),
 		});
 	}
+	books
+}
 
-	let workstations_rdr = open_data(data_path.clone(), "verbs", "workstations_library_world.json");
-	let workstations_json: WorkstationFile = serde_json::from_reader(workstations_rdr).expect("Failed to parse workstations file");
-
-	let wis_rdr = open_data(data_path.clone(), "recipes", "wisdom_commitments.json");
-	let wis_json: WisdomCommitments = serde_json::from_reader(wis_rdr).expect("Failed to parse wisdom commitments file");
-	let commitments: HashMap<_, _> = wis_json.recipes.into_iter().map(|w| (w.id.clone(), w)).collect();
-
-	let skills_rdr = open_data(data_path.clone(), "elements", "skills.json");
-	let skills_json: SkillFile = serde_json::from_reader(skills_rdr).expect("Failed to parse skills file");
-
+fn parse_skills(skill_file: SkillFile, commitments: HashMap<String, Commitment>) -> HashMap<String, Skill> {
 	let mut skills = HashMap::new();
-	for skill in skills_json.elements {
+	for skill in skill_file.elements {
 		let mut p = skill.aspects.clone().into_iter().filter(|a| principles().contains(&a.0.as_str()));
 		let w = skill.aspects.into_iter().filter(|a| a.0.starts_with("w."));
 		let mut commits = Vec::new();
@@ -314,35 +366,5 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 			wisdoms: (c.next().unwrap(), c.next().unwrap())
 		});
 	}
-
-	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_2_keeper.json");
-	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Keeper recipes");
-	let recipes_keeper: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
-
-	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_3_scholar.json");
-	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Scholar recipes");
-	let recipes_scholar: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
-
-	let recipe_rdr = open_data(data_path.clone(), "recipes", "crafting_4b_prentice.json");
-	let recipe_json: RecipeFile = serde_json::from_reader(recipe_rdr).expect("Failed to parse Prentice recipes");
-	let recipes_prentice: Vec<_> = recipe_json.recipes.into_iter().map(|r| r.to_recipe()).collect();
-
-	Data {
-		items,
-		books,
-		skills,
-		workstations: workstations_json.verbs,
-		recipes: (recipes_prentice, recipes_scholar, recipes_keeper),
-	}
-}
-
-fn open_data(path: PathBuf, dir: &str, file: &str) -> BufReader<File> {
-	let mut p = path.clone();
-	p.push(dir);
-	p.push(file);
-	let file = match File::open(&p) {
-		Ok(f) => f,
-		Err(_) => panic!("Failed to open game data at {}", p.to_string_lossy())
-	};
-	BufReader::new(file)
+	skills
 }

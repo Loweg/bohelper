@@ -1,7 +1,7 @@
 #![feature(str_from_utf16_endian)]
 
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashMap,
 	fs::File,
 	io::BufReader,
 	path::PathBuf,
@@ -11,11 +11,12 @@ use clap::Parser;
 
 mod app;
 mod data;
+mod logic;
 mod save;
 
-use save::*;
-
-use crate::data::{init_items, principles_from_soul};
+use data::{init_items, principles_from_soul};
+use logic::find_memories;
+use save::{default_save_path, Save};
 
 fn insert_recipe(recipes: &mut HashMap<(String, String, Option<String>), Vec<String>>, recipe: ((String, String, Option<String>), String)) {
 	match recipes.get_mut(&recipe.0) {
@@ -32,7 +33,6 @@ fn main() {
 	data_path.push("StreamingAssets");
 	data_path.push("bhcontent");
 	data_path.push("core");
-
 	let data = init_items(&data_path);
 
 	let path = if args.save_path == String::new() {
@@ -41,39 +41,24 @@ fn main() {
 	} else {
 		PathBuf::from(args.save_path)
 	};
-
 	println!("Using save path {}", path.to_string_lossy());
-
 	let save_file = File::open(path).expect("Failed to open save file");
 	let save_rdr = BufReader::new(save_file);
-
 	let save: Save = serde_json::from_reader(save_rdr).expect("Failed to parse save file");
-	let payloads = save.root_population_command.resolve();
-
+	let world_items = save.resolve().into_iter().filter(|i|
+		data.items.contains_key(&i.id) ||
+		data.books.contains_key(&i.id) ||
+		data.skills.contains_key(&i.id)).collect();
 
 	if args.principle != String::new() {
 		println!();
-		for payload in payloads {
-			for (k, _) in payload.mutations {
-				if k.starts_with("mastery") {
-					// This is a read book
-					let book = match data.books.get(&payload.entity_id.clone().expect("Book has no entity ID")) {
-						Some(book) => book,
-						None => continue, // happens for the journal
-					};
-					let memory = data.items.get(&book.memory).expect("Couldn't find item for item ID");
-					for (aspect, intensity) in &memory.aspects {
-						if aspect == &args.principle {
-							println!("{} has memory {} with {}: {}", book.label, memory.label, args.principle, intensity)
-						}
-					}
-				}
-			}
+		for mem in find_memories(&args.principle, 8, &world_items, &data.items, &data.books) {
+			let intensity = mem.aspects.get(&args.principle).unwrap();
+			println!("{} has memory {} with {}: {}", mem.source_label, mem.label, args.principle, intensity)
 		}
 	} else if args.solve.is_some() {
 		let aspects = args.solve.unwrap();
 		println!();
-
 		let matching_skills: Vec<_> = data.skills.clone().into_iter().filter(|(_, s)|
 			(s.principles.0 == aspects[0] || s.principles.0 == aspects[1]) &&
 			(s.principles.1 == aspects[0] || s.principles.1 == aspects[1])
@@ -105,25 +90,8 @@ fn main() {
 		}
 		println!();
 
-		let read_books = payloads.into_iter()
-			.filter(|p| p.mutations.iter().any(|(m, _)| m.starts_with("mastery")))
-			.filter_map(|p| data.books.get(&p.entity_id.expect("Read book has no entity ID")))
-			.filter(|b|
-				data.items.get(&b.memory).expect("Couldn't find memory")
-					.aspects.iter().any(|a| aspects.iter().any(|arg| arg == a.0))
-			);
-
-		let mut rec_books = HashMap::new();
-		let memories: HashSet<_> = read_books.clone().map(|b| b.memory.clone()).collect();
-		for m in memories {
-			rec_books.insert(
-				read_books.clone().filter(|b| b.memory == m).next().unwrap().label.clone(),
-				data.items.get(&m).expect("Couldn't find memory").label.clone()
-			);
-		}
-
-		for (b, m) in rec_books {
-			println!("{}: {}", b, m)
+		for mem in find_memories(&args.principle, 8, &world_items, &data.items, &data.books) {
+			println!("{}: {}", mem.source_label, mem.label)
 		}
 	} else if args.aspects.is_some() {
 		let mut printed = Vec::new();
@@ -156,9 +124,9 @@ fn main() {
 	} else if args.craft.is_some() {
 		println!();
 
-		let owned_skills: Vec<_> = payloads.into_iter()
-			.filter(|p| p.entity_id.clone().is_some_and(|e| e.starts_with("s.")))
-			.map(|p| p.entity_id.unwrap()).collect();
+		let owned_skills: Vec<_> = world_items.into_iter()
+			.filter(|p| p.id.starts_with("s."))
+			.map(|p| p.id).collect();
 		let craft = args.craft.unwrap();
 
 		let mut known_recipes = HashMap::new();
