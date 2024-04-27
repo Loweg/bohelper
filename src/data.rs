@@ -225,22 +225,7 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 
 	let items_data = String::from_utf16le(&data[2..]).unwrap();
 	let items_json: ItemFile = serde_json::from_str(&items_data).expect("Failed to parse items file");
-
-	let mut items = HashMap::new();
-
-	for item in items_json.elements {
-		let mut aspects = item.aspects;
-		if let Some(ext) = prototypes.get(&item.inherits) {
-			for (aspect, intensity) in ext {
-				aspects.insert(aspect.clone(), *intensity);
-			}
-		}
-		items.insert(item.id, Item {
-			label: item.label,
-			aspects,
-			scrutiny: item.xtriggers.map(|s| s.scrutiny.get(0).expect("Empty scrutiny").id.clone()),
-		});
-	}
+	let items = parse_items(items_json, prototypes);
 
 	let mut book_path = data_path.clone();
 	book_path.push("elements");
@@ -294,6 +279,26 @@ fn open_data(path: PathBuf, dir: &str, file: &str) -> BufReader<File> {
 		Err(_) => panic!("Failed to open game data at {}", p.to_string_lossy())
 	};
 	BufReader::new(file)
+}
+
+fn parse_items(item_file: ItemFile, prototypes: HashMap<String, HashMap<String, isize>>) -> HashMap<String, Item> {
+	let mut items = HashMap::new();
+
+	for item in item_file.elements {
+		let mut aspects = item.aspects;
+		if let Some(ext) = prototypes.get(&item.inherits) {
+			for (aspect, intensity) in ext {
+				aspects.insert(aspect.clone(), *intensity);
+			}
+		};
+		let scrutiny = item.xtriggers.filter(|t| t.scrutiny.get(0).is_some_and(|s| s.id != "")).map(|t| t.scrutiny.get(0).unwrap().id.clone());
+		items.insert(item.id, Item {
+			label: item.label,
+			aspects,
+			scrutiny,
+		});
+	}
+	items
 }
 
 fn parse_books(book_file: BookFile) -> HashMap<String, Book> {

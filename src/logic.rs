@@ -40,9 +40,10 @@ pub fn find_memories(
 		// Scrutiny
 		if let Some(item) = items.get(&item.id) {
 			if let Some(s) = &item.scrutiny {
-				let mem = items.get(s).expect("Memory not found");
-				if insert_mem(mem, s.clone(), item.label.clone()) {
-					continue;
+				if let Some(mem) = items.get(s) {
+					if insert_mem(mem, s.clone(), item.label.clone()) {
+						continue;
+					}
 				}
 			}
 		}
