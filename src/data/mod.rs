@@ -10,10 +10,27 @@ pub use read::init_items;
 pub type AspectMap = HashMap<String, isize>;
 
 #[derive(Clone, Debug)]
+pub enum ExhaustType {
+	Beast(String),
+	No,
+	Yes,
+}
+
+impl ExhaustType {
+	pub fn exhausts(&self) -> bool {
+		match self {
+			ExhaustType::Beast(_) | ExhaustType::No => false,
+			ExhaustType::Yes => false,
+		}
+	}
+}
+
+#[derive(Clone, Debug)]
 pub struct Item {
 	pub label: String,
 	pub aspects: AspectMap,
 	pub scrutiny: Option<String>,
+	pub fatigues: ExhaustType,
 }
 
 #[derive(Clone, Debug)]

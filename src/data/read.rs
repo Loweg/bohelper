@@ -18,6 +18,12 @@ struct PrototypeFile {
 struct SerdePrototype {
 	id: String,
 	aspects: Option<AspectMap>,
+	xtriggers: Option<ProtoTrigger>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct ProtoTrigger {
+	fatiguing: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -32,12 +38,13 @@ struct SerdeItem {
 	#[serde(rename = "Label")]
 	label: String,
 	aspects: AspectMap,
-	xtriggers: Option<XTrigger>,
+	xtriggers: Option<ItemTrigger>,
 	inherits: String,
 }
 
 #[derive(Deserialize, Clone, Debug)]
-struct XTrigger {
+struct ItemTrigger {
+	dist: Option<Vec<Scrutiny>>,
 	scrutiny: Vec<Scrutiny>,
 }
 
@@ -148,7 +155,8 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 	let mut prototypes = HashMap::new();
 	for prototype in prototypes_json.elements {
 		if let Some(ext) = prototype.aspects {
-			prototypes.insert(prototype.id, ext);
+			let fatigues = prototype.xtriggers.is_some_and(|t| t.fatiguing.is_some());
+			prototypes.insert(prototype.id, (ext, fatigues));
 		}
 	}
 
@@ -217,21 +225,30 @@ fn open_data(path: PathBuf, dir: &str, file: &str) -> BufReader<File> {
 	BufReader::new(file)
 }
 
-fn parse_items(item_file: ItemFile, prototypes: HashMap<String, AspectMap>) -> HashMap<String, Item> {
+fn parse_items(item_file: ItemFile, prototypes: HashMap<String, (AspectMap, bool)>) -> HashMap<String, Item> {
 	let mut items = HashMap::new();
 
 	for item in item_file.elements {
 		let mut aspects = item.aspects;
-		if let Some(ext) = prototypes.get(&item.inherits) {
-			for (aspect, intensity) in ext {
+		let fatigues = if let Some(ext) = prototypes.get(&item.inherits) {
+			for (aspect, intensity) in &ext.0 {
 				aspects.insert(aspect.clone(), *intensity);
 			}
-		};
-		let scrutiny = item.xtriggers.filter(|t| t.scrutiny.first().is_some_and(|s| s.id.is_empty())).map(|t| t.scrutiny.first().unwrap().id.clone());
+			if ext.1 {
+				if item.inherits == "_beast" {
+					let mem = item.xtriggers.clone().and_then(
+						|t| t.dist.and_then(|d| d.first().map(|s| s.id.clone()))
+					).expect("Beast has unexpected xtriggers");
+					ExhaustType::Beast(mem)
+				} else { ExhaustType::Yes }
+			} else { ExhaustType::No }
+		} else { ExhaustType::No };
+		let scrutiny = item.xtriggers.and_then(|t| t.scrutiny.iter().find(|s| !s.id.is_empty()).map(|s| s.id.clone()));
 		items.insert(item.id, Item {
 			label: item.label,
 			aspects,
 			scrutiny,
+			fatigues,
 		});
 	}
 	items

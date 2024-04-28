@@ -48,9 +48,9 @@ fn main() {
 
 	if args.principle != String::new() {
 		println!();
-		for mem in find_memories(&[&args.principle], 8, &world_items, &data.items, &data.books) {
-			let intensity = mem.aspects.get(&args.principle).unwrap();
-			println!("{} has memory {} with {}: {}", mem.source_label, mem.label, args.principle, intensity)
+		for (mem, (source, aspects)) in find_memories(&[&args.principle], 8, &world_items, &data.items, &data.books) {
+			let intensity = aspects.get(&args.principle).unwrap();
+			println!("{} has memory {} with {}: {}", source, mem, args.principle, intensity)
 		}
 	} else if args.solve.is_some() {
 		let aspects = args.solve.unwrap();
@@ -68,8 +68,8 @@ fn main() {
 		}
 		println!();
 
-		for mem in find_memories(&[&aspects[0], &aspects[1]], 8, &world_items, &data.items, &data.books) {
-			println!("{}:\t {}", mem.source_label, mem.label)
+		for (mem, (source, _)) in find_memories(&[&aspects[0], &aspects[1]], 8, &world_items, &data.items, &data.books) {
+			println!("{}:\t {}", source, mem)
 		}
 	} else if args.aspects.is_some() {
 		print_aspected(&data.items, &args.aspects.unwrap())
