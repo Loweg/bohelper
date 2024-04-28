@@ -67,7 +67,7 @@ pub async fn find_mems(
 	let mut res = String::new();
 	for mem in mems {
 		let val = mem.1.1.get(&input.principle).unwrap();
-		res.push_str(&format!("{} has memory {} with {}: {}\n", mem.0, mem.1.0, &input.principle, val));
+		res.push_str(&format!("{} has memory {} with {}: {}\n", mem.1.0, mem.0, &input.principle, val));
 	}
 	res
 }

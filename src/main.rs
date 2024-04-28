@@ -1,9 +1,7 @@
 #![feature(str_from_utf16_endian)]
 
 use std::{
-	env::args,
-	path::PathBuf,
-	sync::{Arc, Mutex},
+	env::args, fs, path::PathBuf, sync::{Arc, Mutex}, time::Duration
 };
 
 use axum::{routing::get, Router};
@@ -16,6 +14,7 @@ mod save;
 use app::*;
 use data::init_items;
 use save::{default_save_path, SaveData};
+use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() {
@@ -26,7 +25,7 @@ async fn main() {
 
 	let path = default_save_path();
 	println!("Using save path {}", path.to_string_lossy());
-	let mut save = SaveData::from_path(path);
+	let mut save = SaveData::from_path(path.clone());
 	save.items = save.items.into_iter().filter(|i|
 		data.items.contains_key(&i.id) ||
 		data.books.contains_key(&i.id) ||
@@ -36,6 +35,29 @@ async fn main() {
 		data: Arc::new(data),
 		save: Arc::new(Mutex::new(save)),
 	};
+
+	let save = state.save.clone();
+	let data = state.data.clone();
+	tokio::spawn(async move {
+		let mut modified = fs::metadata(&path).and_then(|m| m.modified()).expect("Unable to init save metadata");
+		loop {
+			sleep(Duration::from_secs(10)).await;
+			if let Ok(time) = fs::metadata(&path).and_then(|m| m.modified()) {
+				if modified != time {
+					println!("Updating save data");
+					modified = time;
+					let mut new_save = SaveData::from_path(path.clone());
+					new_save.items = new_save.items.into_iter().filter(|i|
+						data.items.contains_key(&i.id) ||
+						data.books.contains_key(&i.id) ||
+						data.skills.contains_key(&i.id)).collect();
+					let mut s = save.lock().unwrap();
+					*s = new_save;
+					drop(s);
+				}
+			}
+		}
+	});
 
 	let app = Router::new()
 		.route("/", get(root))
@@ -48,69 +70,4 @@ async fn main() {
 		.await
 		.unwrap();
 	axum::serve(listener, app).await.unwrap();
-
-
-	/*let matching_skills: Vec<_> = data.skills.iter()
-		.filter(|(_, s)| s.matches_exact(&aspects))
-		.map(|(_, s)| s).collect();
-
-	if matching_skills.is_empty() {
-		println!("Warning: no matching skills")
-	} else {
-		println!("Matching skills:");
-		print_skill_stations(&matching_skills, &data.workstations);
-	}
-	println!();
-
-	for (mem, (source, _)) in find_memories(&[&aspects[0], &aspects[1]], 8, &world_items, &data.items, &data.books) {
-		println!("{}:\t {}", source, mem)
-	}*/
-
-
-	//print_aspected(&data.items, &args.aspects.unwrap())
-
-
-	/*
-	let known_recipes: HashSet<_> = data.recipes.0.iter().chain(data.recipes.1.iter()).chain(data.recipes.2.iter())
-		.filter(|r| skills.contains(&r.skill)).map(|r| r.label.clone()).collect();
-
-	if data::principles().contains(&craft.as_str()) {
-
-	} else {
-		let skill = match data.skills.iter()
-			.find(|(_, s)| s.label.to_lowercase().starts_with(&craft.to_lowercase()))
-		{
-			Some(s) => s,
-			None => { println!("Skill not found: {}", craft); return; },
-		};
-		println!("Using skill {}\n", skill.1.label);
-
-		println!("Prentice recipes:");
-		for r in data.recipes.0.into_iter().filter(|r| skill.0 == &r.skill) {
-			match known_recipes.get(&r.label) {
-				Some(_) => println!("{} ({})", r.label, r.principle),
-				None    => println!("{} ({}) [New Recipe!]", r.label, r.principle),
-			}
-		}
-
-		println!();
-		println!("Scholar recipes:");
-		for r in data.recipes.1.into_iter().filter(|r| skill.0 == &r.skill) {
-			let item = r.ingredient.clone().expect("Scholar recipe uses no ingredient");
-			match known_recipes.get(&r.label) {
-				Some(_) => println!("{} using {} ({})", r.label, item, r.principle),
-				None    => println!("{} using {} ({}) [New Recipe!]", r.label, item, r.principle),
-			}
-		}
-
-		println!();
-		println!("Keeper recipes:");
-		for r in data.recipes.2.into_iter().filter(|r| skill.0 == &r.skill) {
-			let item = data.items.get(&r.ingredient.clone().expect("Keeper recipe uses no ingredient")).expect("Couldn't find ingredient");
-			match known_recipes.get(&r.label) {
-				Some(_) => println!("{} using {} ({})", r.label, item.label, r.principle),
-				None    => println!("{} using {} ({}) [New Recipe!]", r.label, item.label, r.principle),
-			}
-		}
-	}*/
 }
