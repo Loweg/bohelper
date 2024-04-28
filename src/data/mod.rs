@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use ::serde::Deserialize;
 
 mod read;
-pub use read::init_items;
+pub use read::{init_items, Data};
 
 pub type AspectMap = HashMap<String, isize>;
 

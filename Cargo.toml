@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "*", features = ["derive"] }
-clap-num = "*"
-serde_json = "*"
 serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+
+axum = {version = "0.7", features = ["macros"]}
+tokio = { version = "*", features = ["rt-multi-thread"] }
 
 windows = { version = "0.51", features = ["Storage"] }

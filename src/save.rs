@@ -1,20 +1,34 @@
 use std::{
-	collections::HashMap,
-	path::PathBuf,
+	collections::HashMap, fs::File, io::BufReader, path::PathBuf
 };
 
 use serde::Deserialize;
 use serde_json::Value;
 
+pub struct SaveData {
+	pub items: Vec<WorldItem>,
+	pub skills: Vec<String>,
+	pub abilities: Vec<String>,
+}
+
+impl SaveData {
+	pub fn from_path(path: PathBuf) -> Self {
+		let save_file = File::open(path).expect("Failed to open save file");
+		let save_rdr = BufReader::new(save_file);
+		let save: Save = serde_json::from_reader(save_rdr).expect("Failed to parse save file");
+		save.resolve()
+	}
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct Save {
+struct Save {
 	root_population_command: Dominion,
 	populate_xamanek_command: World,
 }
 
 impl Save {
-	pub fn resolve(self) -> (Vec<WorldItem>, Vec<String>, Vec<String>) {
+	fn resolve(self) -> SaveData {
 		let mut environs = self.populate_xamanek_command.current_enviro_fx_commands;
 		let non_locations = ["$type", "vignette", "sky", "weather", "music", "ui_watcher_buttons", "season", "ui_wisdoms_or_world", "meta", "run"];
 		for non in non_locations {
@@ -72,7 +86,11 @@ impl Save {
 				}
 			}
 		}
-		(world_items, skills, abilities)
+		SaveData {
+			items: world_items,
+			skills,
+			abilities,
+		}
 	}
 }
 
