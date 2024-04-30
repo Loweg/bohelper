@@ -107,18 +107,21 @@ fn add_commitment(commit: &(String, String), skill: &Skill, workstations: &[Work
 	let wisdom = commit.0.split('.').nth(1)	.unwrap();
 	let soul = principles_from_soul(&commit.1);
 	let id = "e.".to_string() + wisdom;
-	let stations: Vec<_> = workstations.iter().filter(|w| w.aspects.contains_key(&id))
-		.filter(|w| skill.matches(&w.hints) && soul.1.iter().any(|a| w.hints.iter().any(|b| b == a)))
+	let stations: Vec<_> = workstations.iter().filter(|w|
+		w.wisdoms.contains(&id) &&
+		w.accepts_principles(&[&skill.principles.0, &skill.principles.1]) &&
+		w.accepts_principles(soul.1.as_slice()))
 		.map(|w| &w.label).collect();
 	let s = match stations.len() {
 		1 => format!(                 "{} is upgraded at {} when committed to {}\n", soul.0, stations[0], wisdom),
+		2 => format!(           "{} is upgraded at {} or {} when committed to {}\n", soul.0, stations[0], stations[1], wisdom),
 		0 => format!("Warning: {} can't be upgraded with {} when committed to {}\n", soul.0, skill.label, wisdom),
 		_ => format!(               "{} is upgraded at {:?} when committed to {}\n", soul.0, stations, wisdom),
-	};
-	res.push_str(&s);
+		};
+		res.push_str(&s);
 }
 
-pub fn find_aspected(items: &HashMap<String, Item>, aspects: &[String]) -> HashMap<String, AspectMap> {
+pub fn find_aspected(items: &HashMap<String, Item>, aspects: &[&str]) -> HashMap<String, AspectMap> {
 	let mut found = HashMap::new();
 
 	for item in items.values() {
@@ -129,7 +132,7 @@ pub fn find_aspected(items: &HashMap<String, Item>, aspects: &[String]) -> HashM
 		};
 		if found.contains_key(label) { continue; }
 
-		if aspects.iter().all(|a| item.aspects.contains_key(a)) {
+		if aspects.iter().all(|a| item.aspects.contains_key(a.to_owned())) {
 			found.insert(label.to_owned(), item.aspects.clone());
 		}
 	}

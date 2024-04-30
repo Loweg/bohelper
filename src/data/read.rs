@@ -76,7 +76,61 @@ struct Trigger {
 
 #[derive(Deserialize, Clone, Debug)]
 struct WorkstationFile {
-	verbs: Vec<Workstation>,
+	verbs: Vec<SerdeWorkstation>,
+}
+
+impl WorkstationFile {
+	fn into_workstations(self) -> Vec<Workstation> {
+		let mut workstations = Vec::new();
+		for mut station in self.verbs {
+			let with = station.slots.remove(4);
+			let subject = station.slots.remove(3);
+			let special = if station.aspects.contains_key("instrument") {
+				SpecialWorkstation::Instrument
+			} else {
+				SpecialWorkstation::None
+			};
+			workstations.push(Workstation {
+				label: station.label,
+				principles: station.hints,
+				subject: subject.required.into_keys().collect(),
+				with: with.required.into_keys().collect(),
+				special,
+				wisdoms: station.aspects.into_iter().filter(|a| a.0.starts_with("e.")).map(|a| a.0).collect(),
+			});
+		}
+		let kitchen_aspects = vec!["sustenance".to_string(),"beverage".to_string(),"root".to_string(),"flower".to_string(),"leaf".to_string(),"fuel".to_string()];
+		let mut kitchen = Workstation {
+			label: String::from("Kitchen Range: Gaol"),
+			principles: vec!["scale".to_string(),"lantern".to_string(),"nectar".to_string(),"grail".to_string()],
+			subject: kitchen_aspects.clone(),
+			with: kitchen_aspects,
+			special: SpecialWorkstation::Kitchen,
+			wisdoms: Vec::new(),
+		};
+		workstations.push(kitchen.clone());
+		kitchen.label = String::from("Hearth: Hall of Voices");
+		kitchen.principles = vec!["moon".to_string(),"edge".to_string(),"nectar".to_string(),"grail".to_string()];
+		workstations.push(kitchen.clone());
+		kitchen.label = String::from("Kitchen Range: Servants");
+		kitchen.principles = vec!["scale".to_string(),"heart".to_string(),"nectar".to_string(),"grail".to_string()];
+		workstations.push(kitchen);
+
+		workstations
+	}
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct SerdeWorkstation {
+	label: String,
+	slots: Vec<Slot>,
+	aspects: AspectMap,
+	hints: Vec<String>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct Slot {
+	required: AspectMap,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -184,6 +238,7 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 
 	let workstations_rdr = open_data(data_path.clone(), "verbs", "workstations_library_world.json");
 	let workstations_json: WorkstationFile = serde_json::from_reader(workstations_rdr).expect("Failed to parse workstations file");
+	let workstations = workstations_json.into_workstations();
 
 	let wis_rdr = open_data(data_path.clone(), "recipes", "wisdom_commitments.json");
 	let wis_json: WisdomCommitments = serde_json::from_reader(wis_rdr).expect("Failed to parse wisdom commitments file");
@@ -209,7 +264,7 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 		items,
 		books,
 		skills,
-		workstations: workstations_json.verbs,
+		workstations,
 		recipes: (recipes_prentice, recipes_scholar, recipes_keeper),
 	}
 }

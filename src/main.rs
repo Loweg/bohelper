@@ -10,11 +10,14 @@ mod app;
 mod data;
 mod logic;
 mod save;
+mod ui;
 
 use app::*;
 use data::init_items;
 use save::{default_save_path, SaveData};
 use tokio::time::sleep;
+use tower::ServiceBuilder;
+use tower_http::services::ServeDir;
 
 #[tokio::main]
 async fn main() {
@@ -44,7 +47,6 @@ async fn main() {
 			sleep(Duration::from_secs(10)).await;
 			if let Ok(time) = fs::metadata(&path).and_then(|m| m.modified()) {
 				if modified != time {
-					println!("Updating save data");
 					modified = time;
 					let mut new_save = SaveData::from_path(path.clone());
 					new_save.items = new_save.items.into_iter().filter(|i|
@@ -65,6 +67,9 @@ async fn main() {
 		.route("/solve", get(s_form).post(solve))
 		.route("/crafting", get(c_form).post(crafting))
 		.route("/items", get(i_form).post(items))
+		.nest_service("/assets",
+			ServiceBuilder::new()
+			.service(ServeDir::new("assets")))
 		.with_state(state);
 	let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
 		.await

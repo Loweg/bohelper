@@ -1,0 +1,41 @@
+body {
+	border: 1px solid #565B66;
+	background-color: #0D1017;
+	color: #BFBDB6;
+}
+
+h1,h2,h3,h4,h5,h6 {
+	color: #BFBDB6
+}
+
+header {
+	background-color: #0B0E14;
+}
+
+a {
+	color: #FFB454
+}
+a.new {
+	color: #F26D78
+}
+a.new:visited {
+	color: #D95757
+}
+a:visited {
+	color: #F29668
+}
+
+.hbutton {
+	font-size: 1.5rem;
+	padding-left: 8px;
+	padding-right: 8px;
+}
+
+input {
+	font-size: 1.2rem;
+}
+
+.textbox {
+	margin: 5px;
+	border: 1px solid #565B66;
+}

@@ -10,6 +10,9 @@ serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 
 axum = {version = "0.7", features = ["macros"]}
+maud = { version = "*", features = ["axum"] }
 tokio = { version = "*", features = ["rt-multi-thread"] }
+tower = "*"
+tower-http = { version = "*", features = ["fs"] }
 
 windows = { version = "0.51", features = ["Storage"] }
