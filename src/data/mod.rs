@@ -1,6 +1,6 @@
 //#![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use ::serde::Deserialize;
 
@@ -33,6 +33,7 @@ pub struct Item {
 	pub fatigues: ExhaustType,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Book {
 	pub label: String,
@@ -106,6 +107,22 @@ pub struct Recipe {
 	pub skill:      String,
 	pub principle:  String,
 	pub ingredient: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RecipeLevel {
+	Prentice,
+	Keeper,
+	Scholar,
+}
+impl fmt::Display for RecipeLevel {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			RecipeLevel::Prentice => f.write_str("Prentice"),
+			RecipeLevel::Keeper => f.write_str("Keeper"),
+			RecipeLevel::Scholar => f.write_str("Scholar"),
+		}
+	}
 }
 
 pub fn principles_from_soul(soul: &str) -> (&'static str, Vec<&'static str>) {

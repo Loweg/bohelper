@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fmt;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -9,8 +8,8 @@ use maud::{html, Markup, PreEscaped};
 use serde::Deserialize;
 use std::sync::Mutex;
 
-use crate::data::{Data, Recipe};
-use crate::logic::{find_aspected, find_memories, get_skill_stations};
+use crate::data::{Data, Recipe, RecipeLevel};
+use crate::logic::{dis_set, find_aspected, find_memories, get_skill_stations};
 use crate::save::SaveData;
 use crate::ui::base_layout;
 
@@ -42,12 +41,12 @@ pub async fn find_mems(
 	State(state): State<AppState>,
 	Form(input): Form<PInput>,
 ) -> impl IntoResponse {
-	let mems = find_memories(&[&input.principle], 8, &state.save.lock().unwrap().items, &state.data.items, &state.data.books);
+	let mems = find_memories(&[&input.principle], &state.save.lock().unwrap().items, &state.data.items, &state.data.books);
 	drop(state.save);
 	let mut res = String::new();
 	for mem in mems {
-		let val = mem.1.1.get(&input.principle).unwrap();
-		res.push_str(&format!("{} has memory {} with {}: {}\n", mem.1.0, mem.0, &input.principle, val));
+		res.push_str(&format!("<h3>{}</h3>", mem.0));
+		res.push_str(&format!("<p>{}</p>", dis_set(&mem.1)));
 	}
 	base_layout("BoH Memories", response_to_html(res))
 }
@@ -78,25 +77,30 @@ pub async fn solve(
 		.map(|(_, s)| s).collect();
 
 	if matching_skills.is_empty() {
-		res.push_str("Warning: no matching skills\n");
+		res.push_str("<h2>No Matching Skills</h2>");
 	} else {
-		res.push_str("Matching skills:\n");
+		res.push_str("<h2>Matching skills</h2>");
 		res.push_str(&get_skill_stations(&matching_skills, &state.data.workstations));
 	}
 
 	let mems = find_memories(
 		&[&input.p1, &input.p2],
-		8,
 		&state.save.lock().unwrap().items,
 		&state.data.items,
 		&state.data.books
 	);
 	drop(state.save);
 
-	for (mem, (source, _)) in mems {
-		res.push_str(&format!("{}:\t {}\n", source, mem));
+	if mems.is_empty() {
+		res.push_str("<h2>No Matching Memories</h2>");
+	} else {
+		res.push_str("<h2>Matching Memories</h2>");
+		for (mem, v) in mems.iter() {
+			res.push_str(&format!("<h3>{}</h3>", mem));
+			res.push_str(&format!("<p>{}</p>", dis_set(v)));
+		}
 	}
-	base_layout("BoH Solver", response_to_html(res))
+	base_layout("BoH Solver", PreEscaped(res))
 }
 
 pub async fn c_form() -> Markup {
@@ -117,20 +121,10 @@ pub async fn crafting(
 	State(state): State<AppState>,
 	Form(input): Form<CInput>,
 ) -> Markup {
-	/*for recipe in state.data.recipes.0.iter()
-		.chain(state.data.recipes.1.iter())
-		.chain(state.data.recipes.2.iter())
-	{
-		if !state.data.workstations.iter().any(|w| w.can_craft(recipe, &state.data)) {
-			println!("Uncraftable: {:?}", recipe)
-		}
-		}*/
-
 	let save = state.save.lock().expect("Lock poison error");
 	let known_recipes: HashSet<_> = state.data.recipes.0.iter()
 		.chain(state.data.recipes.1.iter())
 		.chain(state.data.recipes.2.iter())
-		.filter(|r| state.data.workstations.iter().any(|w| w.can_craft(r, &state.data)))
 		.filter(|r| save.skills.contains(&r.skill))
 		.map(|r| r.label.clone()).collect();
 	drop(save);
@@ -146,11 +140,7 @@ pub async fn crafting(
 	let mut res = format!("Using skill {}\n", skill.1.label).to_owned();
 	let mut collate_recipes = |recipes: &Vec<Recipe>, level: RecipeLevel| {
 		res.push_str(&format!("\n{} recipes:\n", level));
-		let recipes: Vec<_> = recipes.iter().filter(|r|
-			skill.0 == &r.skill &&
-			state.data.workstations.iter().any(|w| w.can_craft(r, &state.data))).collect();
-		let len = recipes.len();
-		for r in recipes {
+		for r in recipes.iter().filter(|r| skill.0 == &r.skill) {
 			let item = match level {
 				RecipeLevel::Prentice => String::new(),
 				RecipeLevel::Scholar => String::from(" using ") + &r.ingredient.as_ref().unwrap(),
@@ -166,11 +156,6 @@ pub async fn crafting(
 				Some(_) => format!("{}{} ({})\n", r.label, item, r.principle),
 				None    => format!("{}{} ({}) [New Recipe!]\n", r.label, item, r.principle),
 			});
-			match len {
-				0 => res.push_str("[2 uncraftable recipes not shown]\n"),
-				1 => res.push_str("[1 uncraftable recipe not shown]\n"),
-				_ => {},
-			}
 		}
 	};
 
@@ -179,22 +164,6 @@ pub async fn crafting(
 	collate_recipes(&state.data.recipes.2, RecipeLevel::Keeper);
 
 	base_layout("BoH Recipes", response_to_html(res))
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum RecipeLevel {
-	Prentice,
-	Keeper,
-	Scholar,
-}
-impl fmt::Display for RecipeLevel {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			RecipeLevel::Prentice => f.write_str("Prentice"),
-			RecipeLevel::Keeper => f.write_str("Keeper"),
-			RecipeLevel::Scholar => f.write_str("Scholar"),
-		}
-	}
 }
 
 pub async fn i_form() -> Markup {

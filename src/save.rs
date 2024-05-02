@@ -5,6 +5,7 @@ use std::{
 use serde::Deserialize;
 use serde_json::Value;
 
+#[allow(dead_code)]
 pub struct SaveData {
 	pub items: Vec<WorldItem>,
 	pub skills: Vec<String>,

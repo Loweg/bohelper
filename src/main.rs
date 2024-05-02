@@ -1,4 +1,4 @@
-#![feature(str_from_utf16_endian)]
+#![feature(str_from_utf16_endian,map_try_insert, string_remove_matches)]
 
 use std::{
 	env::args, fs, path::PathBuf, sync::{Arc, Mutex}, time::Duration

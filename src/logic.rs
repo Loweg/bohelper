@@ -1,17 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::{
-	data::{
-		principles_from_soul,
-		AspectMap,
-		Book,
-		ExhaustType,
-		Item,
-		Skill,
-		Workstation
-	},
-	save::WorldItem
-};
+use crate::data::*;
+use crate::save::WorldItem;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Memory {
@@ -20,50 +10,27 @@ pub struct Memory {
 	pub aspects: AspectMap,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord)]
-enum Source {
-	NonExhaust,
-	Book,
-	Beast,
-	Exhaust,
-}
-impl PartialOrd for Source {
-	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		Some((*self as u8).cmp(&(*other as u8)))
-	}
-}
-
 pub fn find_memories(
 	principles: &[&String],
-	qty: u8,
 	world_items: &Vec<WorldItem>,
 	items: &HashMap<String, Item>,
 	books: &HashMap<String, Book>,
-) -> HashMap<String, (String, AspectMap)> {
-	let mut candidates = Vec::new();
+) -> HashMap<String, HashSet<String>> {
+	let mut mems = HashMap::new();
 
 	for item in world_items {
 		// Scrutiny
 		if let Some(item) = items.get(&item.id) {
 			if let Some(mem) = item.scrutiny.clone().and_then(|s| items.get(&s)) {
 				if mem.aspects.keys().any(|a| principles.contains(&a)) {
-					let source = if item.fatigues.exhausts() { Source::Exhaust } else { Source::NonExhaust };
-					candidates.push((Memory {
-						label: mem.label.clone(),
-						source_label: item.label.clone(),
-						aspects: mem.aspects.clone(),
-					}, source));
+					ins_ext(&mut mems, &mem.label, &item.label);
 				}
 			}
 			// Beast
 			if let ExhaustType::Beast(b) = &item.fatigues {
 				let mem = items.get(b).expect("Couldn't find item for item ID");
 				if mem.aspects.keys().any(|a| principles.contains(&a)) {
-					candidates.push((Memory {
-						label: mem.label.clone(),
-						source_label: item.label.clone(),
-						aspects: mem.aspects.clone(),
-					}, Source::Beast));
+					ins_ext(&mut mems, &mem.label, &item.label);
 				}
 			}
 			continue;
@@ -75,35 +42,33 @@ pub fn find_memories(
 				if let Some(book) = books.get(&item.id) {
 					let mem = items.get(&book.memory).expect("Couldn't find item for item ID");
 					if mem.aspects.keys().any(|a| principles.contains(&a)) {
-						candidates.push((Memory {
-							label: mem.label.clone(),
-							source_label: book.label.clone(),
-							aspects: mem.aspects.clone(),
-						}, Source::Book));
+						ins_ext(&mut mems, &mem.label, &book.label);
 					}
 				}
 				break;
 			}
 		}
 	}
+	mems
+}
 
-	candidates.sort_by_key(|x| x.1);
-	candidates.into_iter().map(|(m, _)| (m.label, (m.source_label, m.aspects))).take(qty.into()).collect()
+fn ins_ext(map: &mut HashMap<String, HashSet<String>>, mem: &String, item: &String) {
+	if let Err(mut e) = map.try_insert(mem.clone(), HashSet::from([item.clone()])) {
+		e.entry.get_mut().insert(item.clone());
+	}
 }
 
 pub fn get_skill_stations(skills: &Vec<&Skill>, workstations: &[Workstation]) -> String {
 	let mut res = String::new();
 	for skill in skills {
-		res.push_str(&skill.label);
-		res.push('\n');
-		add_commitment(&skill.wisdoms.0, skill, workstations, &mut res);
-		add_commitment(&skill.wisdoms.1, skill, workstations, &mut res);
-		res.push('\n')
+		res.push_str(&format!("<h3>{}</h3>", skill.label));
+		res.push_str(&add_commitment(&skill.wisdoms.0, skill, workstations));
+		res.push_str(&add_commitment(&skill.wisdoms.1, skill, workstations));
 	}
 	res
 }
 
-fn add_commitment(commit: &(String, String), skill: &Skill, workstations: &[Workstation], res: &mut String) {
+fn add_commitment(commit: &(String, String), skill: &Skill, workstations: &[Workstation]) -> String {
 	let wisdom = commit.0.split('.').nth(1)	.unwrap();
 	let soul = principles_from_soul(&commit.1);
 	let id = "e.".to_string() + wisdom;
@@ -111,14 +76,11 @@ fn add_commitment(commit: &(String, String), skill: &Skill, workstations: &[Work
 		w.wisdoms.contains(&id) &&
 		w.accepts_principles(&[&skill.principles.0, &skill.principles.1]) &&
 		w.accepts_principles(soul.1.as_slice()))
-		.map(|w| &w.label).collect();
-	let s = match stations.len() {
-		1 => format!(                 "{} is upgraded at {} when committed to {}\n", soul.0, stations[0], wisdom),
-		2 => format!(           "{} is upgraded at {} or {} when committed to {}\n", soul.0, stations[0], stations[1], wisdom),
-		0 => format!("Warning: {} can't be upgraded with {} when committed to {}\n", soul.0, skill.label, wisdom),
-		_ => format!(               "{} is upgraded at {:?} when committed to {}\n", soul.0, stations, wisdom),
-		};
-		res.push_str(&s);
+		.map(|w| w.label.clone()).collect();
+	match stations.len() {
+		0 => format!("<p>Warning: {} can't be upgraded when committed to {}</p>", soul.0, wisdom),
+		_ => format!(         "<p>{} is upgraded at {} when committed to {}</p>", soul.0, dis_vec(&stations), wisdom),
+	}
 }
 
 pub fn find_aspected(items: &HashMap<String, Item>, aspects: &[&str]) -> HashMap<String, AspectMap> {
@@ -137,4 +99,55 @@ pub fn find_aspected(items: &HashMap<String, Item>, aspects: &[&str]) -> HashMap
 		}
 	}
 	found
+}
+
+pub fn dis_vec(v: &Vec<String>) -> String {
+	match v.len() {
+		0 => String::new(),
+		1 => v[0].to_string(),
+		2 => format!("{} or {}", v[0].clone(), v[1].clone()),
+		l => {
+			let mut res = String::new();
+			for i in 0..(l-1) {
+				res.push_str(&fmt_name(v[i].to_string()));
+				res.push_str(", ");
+			}
+			res.push_str("or ");
+			res.push_str(&fmt_name(v[l-1].to_string()));
+			res
+		}
+	}
+}
+
+pub fn dis_set(v: &HashSet<String>) -> String {
+	match v.len() {
+		0 => String::new(),
+		1 => v.iter().next().unwrap().to_string(),
+		2 => {
+			let mut it = v.iter();
+			format!("{} or {}", it.next().unwrap().to_string(), it.next().unwrap().to_string())
+		},
+		_ => {
+			let mut qty = 0;
+			let mut res = String::new();
+			let mut it = v.iter().peekable();
+			loop {
+				let item = it.next().unwrap();
+				if it.peek().is_none() || qty == 8 {
+					res.push_str("or ");
+					res.push_str(&fmt_name(item.to_string()));
+					return res;
+				}
+				res.push_str(&fmt_name(item.to_string()));
+				res.push_str(", ");
+				qty += 1;
+			}
+		}
+	}
+}
+
+fn fmt_name(name: String) -> String {
+	if name.contains(',') {
+		format!("'{}'", name)
+	} else { name }
 }
