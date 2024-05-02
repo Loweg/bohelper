@@ -49,7 +49,7 @@ pub async fn find_mems(
 		res.push_str(&format!("<h3>{}</h3>", mem.0));
 		res.push_str(&format!("<p>{}</p>", dis_set(&mem.1)));
 	}
-	base_layout("BoH Memories", response_to_html(res))
+	base_layout("BoH Memories", PreEscaped(res))
 }
 
 pub async fn s_form() -> Markup {
@@ -138,9 +138,9 @@ pub async fn crafting(
 	};
 
 
-	let mut res = format!("Using skill {}\n", skill.1.label).to_owned();
+	let mut res = format!("<h2>Using skill {}</h2>", skill.1.label).to_owned();
 	let mut collate_recipes = |recipes: &Vec<Recipe>, level: RecipeLevel| {
-		res.push_str(&format!("\n{} recipes:\n", level));
+		res.push_str(&format!("<h3>{} recipes:</h3>", level));
 		for r in recipes.iter().filter(|r| skill.0 == &r.skill) {
 			let item = match level {
 				RecipeLevel::Prentice => String::new(),
@@ -154,8 +154,8 @@ pub async fn crafting(
 				},
 			};
 			res.push_str(&match known_recipes.get(&r.label) {
-				Some(_) => format!("{}{} ({})\n", r.label, item, r.principle),
-				None    => format!("{}{} ({}) [New Recipe!]\n", r.label, item, r.principle),
+				Some(_) => format!("<p>{}{} ({})</p>", r.label, item, r.principle),
+				None    => format!("<p>{}{} ({}) [New Recipe!]</p>", r.label, item, r.principle),
 			});
 		}
 	};
@@ -164,7 +164,7 @@ pub async fn crafting(
 	collate_recipes(&state.data.recipes.1, RecipeLevel::Scholar);
 	collate_recipes(&state.data.recipes.2, RecipeLevel::Keeper);
 
-	base_layout("BoH Recipes", response_to_html(res))
+	base_layout("BoH Recipes", PreEscaped(res))
 }
 
 pub async fn i_form() -> Markup {
@@ -190,21 +190,14 @@ pub async fn items(
 
 	let mut res = String::new();
 	for (label, aspects) in found {
-		res.push_str(&label);
-		res.push('\n');
+		res.push_str(&format!("<h3>{label}</h3>"));
+		res.push_str("<p>");
 		for (aspect, intensity) in aspects {
 			if !aspect.starts_with("boost") {
-				res.push_str(&format!("{aspect}: {intensity}  	\n"));
+				res.push_str(&format!("{aspect}: {intensity}, "));
 			}
 		}
+		res.push_str("</p>");
 	}
-	base_layout("BoH Item Browser", response_to_html(res))
-}
-
-fn response_to_html(res: String) -> Markup {
-	let mut html = String::new();
-	for l in res.lines() {
-		html.push_str(&format!("<p>{l}</p>"))
-	}
-	html! {(PreEscaped(html))}
+	base_layout("BoH Item Browser", PreEscaped(res))
 }
