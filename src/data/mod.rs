@@ -1,8 +1,8 @@
-//#![allow(dead_code)]
+#![allow(dead_code)]
 
 use std::{collections::HashMap, fmt};
 
-use ::serde::Deserialize;
+use serde::Deserialize;
 
 mod read;
 pub use read::{init_items, Data};

@@ -1,10 +1,13 @@
-#![feature(str_from_utf16_endian,map_try_insert, string_remove_matches)]
+#![feature(str_from_utf16_endian, map_try_insert, string_remove_matches)]
 
 use std::{
 	env::args, fs, path::PathBuf, sync::{Arc, Mutex}, time::Duration
 };
 
 use axum::{routing::get, Router};
+use tokio::time::sleep;
+use tower::ServiceBuilder;
+use tower_http::services::ServeDir;
 
 mod app;
 mod data;
@@ -15,9 +18,6 @@ mod ui;
 use app::*;
 use data::init_items;
 use save::{default_save_path, SaveData};
-use tokio::time::sleep;
-use tower::ServiceBuilder;
-use tower_http::services::ServeDir;
 
 #[tokio::main]
 async fn main() {

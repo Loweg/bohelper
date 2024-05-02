@@ -1,12 +1,13 @@
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use axum::extract::State;
-use axum::response::IntoResponse;
-use axum::Form;
+use axum::{
+	extract::State,
+	response::IntoResponse,
+	Form,
+};
 use maud::{html, Markup, PreEscaped};
 use serde::Deserialize;
-use std::sync::Mutex;
 
 use crate::data::{Data, Recipe, RecipeLevel};
 use crate::logic::{dis_set, find_aspected, find_memories, get_skill_stations};
