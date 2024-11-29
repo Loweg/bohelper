@@ -214,26 +214,12 @@ pub fn init_items(data_path: &PathBuf) -> Data {
 		}
 	}
 
-	let mut item_path = data_path.clone();
-	item_path.push("elements");
-	item_path.push("aspecteditems.json");
-	let mut f = File::open(item_path).unwrap();
-	let mut data = Vec::new();
-	f.read_to_end(&mut data).unwrap();
-
-	let items_data = String::from_utf16le(&data[2..]).unwrap();
-	let items_json: ItemFile = serde_json::from_str(&items_data).expect("Failed to parse items file");
+	let items_rdr = open_data(data_path.clone(), "elements", "aspecteditems.json");
+	let items_json: ItemFile = serde_json::from_reader(items_rdr).expect("Failed to parse items file");
 	let items = parse_items(items_json, prototypes);
 
-	let mut book_path = data_path.clone();
-	book_path.push("elements");
-	book_path.push("tomes.json");
-	let mut bf = File::open(book_path).unwrap();
-	let mut b_data = Vec::new();
-	bf.read_to_end(&mut b_data).unwrap();
-
-	let books_data = String::from_utf16le(&b_data[2..]).unwrap();
-	let books_json: BookFile = serde_json::from_str(&books_data).expect("Failed to parse tomes file");
+	let books_rdr = open_data(data_path.clone(), "elements", "tomes.json");
+	let books_json: BookFile = serde_json::from_reader(books_rdr).expect("Failed to parse tomes file");
 	let books = parse_books(books_json);
 
 	let workstations_rdr = open_data(data_path.clone(), "verbs", "workstations_library_world.json");
